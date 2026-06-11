@@ -1,0 +1,37 @@
+Here's both:
+
+---
+
+## Tomorrow's Focus List
+
+1. **Review the PDFs** — both are in `Z:\GIT\Cursor\new project\youtube-transcriber\Business Plan\`
+   - `YT_Transcriber_Clerk_Proposal.pdf` — tier models A/B/C/D, cost/revenue breakdown
+   - `YT_Transcriber_Business_Plan.pdf` — full UK business plan with action checklist
+
+2. **Pick a tier model** — decide between Model A, B, C, or D (or a mix), and lock in the tier names and prices
+
+3. **Domain decision** — choose between `yttranscriber` or `tubescript`, then register `.co.uk`, `.io`, and `.app` before someone else grabs them
+
+4. **Check the logo in the PDF** — confirm the header image is displaying correctly after the fix
+
+5. **Start Clerk auth integration** — wire Clerk login into the Flask app as Phase 1 of the build roadmap
+
+6. **Business setup decisions** — Ltd company vs sole trader, registered address, bank account (see checklist in business plan PDF)
+
+---
+
+## New Chat Context Message
+
+> I'm building a UK SaaS web app called **YT Transcriber** — a YouTube transcript tool that fetches transcripts, groups them into timestamped sentences, screenshots URLs mentioned in videos, and exports everything as a Word doc and ZIP. The website is a Flask app running in Docker, located at `Z:\GIT\Cursor\new project\youtube-transcriber\` and pushed to GitHub at `lewis159/youtube-transcriber`.
+>
+> We've built: the core Flask app, 5 colour themes, ZIP export, notes panel, transcript search, links & screenshots panel, and a JPEG logo (in `Business Plan\static\`).
+>
+> We've planned: Clerk for auth + billing, Stripe connected via Clerk, a free trial of 3 videos then paid tiers. Four tier model options (A/B/C/D) are documented in `Business Plan\YT_Transcriber_Clerk_Proposal.pdf`. A full UK business plan is in `Business Plan\YT_Transcriber_Business_Plan.pdf`.
+>
+> The build roadmap is: **Phase 1** — Clerk auth + subscription tiers. **Phase 2** — Collections, folders, share links. **Phase 3** — AI chapter markers (Claude Haiku), scheduled transcription, transcript correction.
+>
+> Tomorrow we're starting by reviewing the PDFs, picking a tier model, registering domains (`yttranscriber.co.uk`, `.io`, `.app` are available — `.com` is taken until Oct 2026), and beginning the Clerk auth integration.
+
+---
+
+Save that message and paste it at the start of any new chat — it'll get you straight back up to speed. Have a good evening and we'll pick it up tomorrow.

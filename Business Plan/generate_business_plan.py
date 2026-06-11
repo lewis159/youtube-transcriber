@@ -9,7 +9,7 @@ from reportlab.platypus import (
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from datetime import date
 
-LOGO_PATH = r"Z:\GIT\Cursor\new project\youtube-transcriber\business plan\static\logo_full@2x.jpg"
+LOGO_PATH = r"Z:\GIT\Cursor\new project\youtube-transcriber\business plan\logo_full@2x.png"
 
 OUTPUT = r"Z:\GIT\Cursor\new project\youtube-transcriber\business plan\YT_Transcriber_Business_Plan.pdf"
 

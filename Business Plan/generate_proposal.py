@@ -4,12 +4,13 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    HRFlowable, PageBreak, KeepTogether
+    HRFlowable, PageBreak, KeepTogether, Image
 )
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from datetime import date
 
-OUTPUT = r"Z:\GIT\Cursor\youtube-transcriber\YT_Transcriber_Clerk_Proposal.pdf"
+OUTPUT     = r"Z:\GIT\Cursor\new project\youtube-transcriber\business plan\YT_Transcriber_Clerk_Proposal.pdf"
+LOGO_PATH  = r"Z:\GIT\Cursor\new project\youtube-transcriber\business plan\logo_full@2x.png"
 
 # ── Colours ──────────────────────────────────────────────────────────────────
 RED      = colors.HexColor("#E53935")
@@ -77,15 +78,17 @@ W = A4[0] - 36*mm
 story = []
 
 # ── Cover ─────────────────────────────────────────────────────────────────────
+logo_w = W * 0.58
+logo_img = Image(LOGO_PATH, width=logo_w, height=logo_w / 5)
+
 cover_table = Table(
-    [[Paragraph("&#9654; YT Transcriber", S("CT", fontSize=28, textColor=RED, fontName="Helvetica-Bold")),
-      Paragraph("INTERNAL", S("IT", fontSize=8, textColor=MID_GREY, fontName="Helvetica", alignment=TA_RIGHT))]],
+    [[logo_img, Paragraph("INTERNAL", S("IT", fontSize=8, textColor=MID_GREY, fontName="Helvetica", alignment=TA_RIGHT))]],
     colWidths=[W * 0.75, W * 0.25]
 )
 cover_table.setStyle(TableStyle([
     ("BACKGROUND", (0, 0), (-1, -1), DARK_BG),
-    ("TOPPADDING",  (0, 0), (-1, -1), 20),
-    ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
+    ("TOPPADDING",  (0, 0), (-1, -1), 14),
+    ("BOTTOMPADDING",(0, 0), (-1, -1), 14),
     ("LEFTPADDING", (0, 0), (-1, -1), 14),
     ("RIGHTPADDING",(0, 0), (-1, -1), 14),
     ("VALIGN",      (0, 0), (-1, -1), "MIDDLE"),
