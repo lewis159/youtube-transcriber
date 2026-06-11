@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}{{ video.title }} — YT Transcriber{% endblock %}
+
+{% block content %}
+
+<div class="video-page">
+
+  <!-- Back -->
+  <a href="/" class="back-link">&#8592; All Videos</a>
+
+  <div class="video-title-row">
+    <h1 class="video-title">{{ video.title }}</h1>
+    {% if video.status == 'done' %}
+    <a href="/api/export/{{ video.video_id }}" class="btn btn--export" download>
+      &#8681; Download ZIP
+    </a>
+    {% endif %}
+  </div>
+
+  {% if video.status == 'error' %}
+  <div class="alert alert--error">
+    Processing failed: {{ video.error or 'Unknown error.' }}
+  </div>
+  {% elif video.status != 'done' %}
+  <div class="alert alert--info" id="processingBanner">
+    &#9203; Still processing — page will update automatically.
+  </div>
+  <script>
+    (function poll() {
+      setTimeout(async function() {
+        const res  = await fetch('/api/status/{{ video.video_id }}');
+        const data = await res.json();
+        if (data.status === 'done') location.reload();
+        else if (data.status !== 'error') poll();
+      }, 3000);
+    })();
+  </script>
+  {% else %}
+
+  <!-- Two-column layout: player + transcript -->
+  <div class="video-layout">
+
+    <!-- Left: player + notes -->
+    <div class="left-col">
+      <div class="player-wrapper">
+        <iframe
+          id="ytPlayer"
+          src="https://www.youtube.com/embed/{{ video.video_id }}?enablejsapi=1"
+          frameborder="0"
+          allowfullscreen
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        ></iframe>
+      </div>
+
+      <!-- Description -->
+      {% if video.description %}
+      <div class="panel">
+        <h2 class="panel-heading">Video Description</h2>
+        <div class="description-text">{{ video.description }}</div>
+      </div>
+      {% endif %}
+
+      <!-- Notes -->
+      <div class="panel">
+        <h2 class="panel-heading">My Notes</h2>
+        <textarea
+          id="notesArea"
+          class="notes-textarea"
+          placeholder="Add your notes here…"
+        >{{ video.notes or '' }}</textarea>
+        <button class="btn btn--save" onclick="saveNotes()">Save Notes</button>
+        <span id="notesSaved" class="save-confirm hidden">Saved &#10003;</span>
+      </div>
+    </div>
+
+    <!-- Right: transcript -->
+    <div class="right-col">
+      <div class="panel panel--transcript">
+        <h2 class="panel-heading">
+          Transcript
+          <input type="text" id="transcriptSearch" class="search-input" placeholder="Search transcript…" oninput="filterTranscript(this.value)" />
+        </h2>
+        <div class="transcript-scroll" id="transcriptScroll">
+          {% for sentence in video.sentences %}
+          <div class="transcript-line" data-text="{{ sentence.text | lower }}">
+            <button
+              class="ts-btn"
+              onclick="seekTo({{ sentence.start | int }})"
+              title="Jump to {{ sentence.start | int }}s"
+            >{{ '{:d}:{:02d}'.format((sentence.start | int) // 60, (sentence.start | int) % 60) }}</button>
+            <span class="ts-text">{{ sentence.text }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Links & Screenshots -->
+      {% if video.screenshots %}
+      <div class="panel">
+        <h2 class="panel-heading">Links & Screenshots</h2>
+        <div class="links-list">
+          {% for item in video.screenshots %}
+          <div class="link-item">
+            <div class="link-meta">
+              <button class="ts-btn" onclick="seekTo({{ item.start | int }})">
+                {{ '{:d}:{:02d}'.format((item.start | int) // 60, (item.start | int) % 60) }}
+              </button>
+              <a href="{{ item.url }}" target="_blank" rel="noopener" class="link-url">{{ item.url }}</a>
+            </div>
+            {% if item.filename %}
+            <img
+              src="/output/{{ video.video_id }}/{{ item.filename }}"
+              class="link-screenshot"
+              alt="Screenshot of {{ item.url }}"
+              loading="lazy"
+            />
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Seek YouTube player to a timestamp in seconds
+function seekTo(seconds) {
+  const iframe = document.getElementById('ytPlayer');
+  if (!iframe) return;
+  iframe.contentWindow.postMessage(
+    JSON.stringify({ event: 'command', func: 'seekTo', args: [seconds, true] }),
+    '*'
+  );
+}
+
+// Save notes via API
+async function saveNotes() {
+  const notes = document.getElementById('notesArea').value;
+  const confirm = document.getElementById('notesSaved');
+  await fetch('/api/notes/{{ video.video_id }}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notes })
+  });
+  confirm.classList.remove('hidden');
+  setTimeout(() => confirm.classList.add('hidden'), 2000);
+}
+
+// Filter transcript lines by search term
+function filterTranscript(query) {
+  const q = query.toLowerCase();
+  document.querySelectorAll('.transcript-line').forEach(line => {
+    const match = !q || line.dataset.text.includes(q);
+    line.style.display = match ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}
