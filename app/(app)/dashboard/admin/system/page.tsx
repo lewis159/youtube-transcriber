@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { AlertCircle, RotateCw, LogSquare } from 'lucide-react'
 
 interface Container {
   name: string
@@ -106,7 +105,7 @@ export default function SystemHealthPage() {
       {/* Status Messages */}
       {error && (
         <div className="bg-[#2A0F0F] border border-[#5A1515] rounded-lg p-4 text-[#E04B4A] flex gap-3">
-          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <div className="w-5 h-5 flex-shrink-0 mt-0.5">⚠</div>
           <p className="text-sm">{error}</p>
         </div>
       )}
@@ -144,7 +143,7 @@ export default function SystemHealthPage() {
                 </div>
                 {container.isWarning && (
                   <div className="bg-[#5A4A2A] border border-[#8A6A3A] text-[#E0B04A] px-3 py-1 rounded-lg text-xs font-medium flex items-center gap-2">
-                    <AlertCircle className="w-3 h-3" />
+                    <span>⚠️</span>
                     High reboot rate
                   </div>
                 )}
@@ -198,7 +197,7 @@ export default function SystemHealthPage() {
                   onClick={() => setShowLogs(showLogs === container.name ? null : container.name)}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[#2A2A35] text-[#888] hover:text-white hover:border-[#378ADD] transition-colors text-sm font-medium"
                 >
-                  <LogSquare className="w-4 h-4" />
+                  <span>📋</span>
                   {showLogs === container.name ? 'Hide' : 'View'} Logs
                 </button>
                 <button
@@ -206,7 +205,7 @@ export default function SystemHealthPage() {
                   disabled={rebooting === container.name}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#378ADD] hover:bg-[#185FA5] disabled:bg-[#2A2A35] text-white transition-colors text-sm font-medium"
                 >
-                  <RotateCw className={`w-4 h-4 ${rebooting === container.name ? 'animate-spin' : ''}`} />
+                  <span>🔄</span>
                   {rebooting === container.name ? 'Rebooting...' : 'Reboot'}
                 </button>
               </div>
