@@ -1,0 +1,9 @@
+node_modules
+.next
+.env*.local
+output/
+Business Plan/
+guides/
+*.xlsx
+*.zip
+.git
