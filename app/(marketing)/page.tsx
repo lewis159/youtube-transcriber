@@ -7,10 +7,12 @@ export default function LandingPage() {
     <main className="flex flex-col min-h-screen">
       {/* Nav */}
       <header className="border-b px-6 py-4 flex items-center justify-between">
-        <span className="font-semibold text-lg">YT Transcriber</span>
+        <Link href="/">
+          <img src="/logos/logo_full.png" alt="YT Transcriber" className="h-7 w-auto" />
+        </Link>
         <div className="flex gap-3">
           <Link href="/sign-in" className={buttonVariants({ variant: 'ghost' })}>Sign in</Link>
-          <Link href="/sign-up" className={buttonVariants({ variant: 'default' })}>Start free</Link>
+          <Link href="/sign-up" className={buttonVariants({ variant: 'default' })}>Sign up</Link>
         </div>
       </header>
 
@@ -23,7 +25,7 @@ export default function LandingPage() {
           Paste a URL, get a full transcript in seconds. Add notes, export PDFs, share with your team.
         </p>
         <div className="flex gap-4">
-          <Link href="/sign-up" className={buttonVariants({ size: 'lg' })}>Start free — no card needed</Link>
+          <Link href="/sign-up" className={buttonVariants({ size: 'lg' })}>Sign up — no card needed</Link>
           <Link href="/sign-in" className={buttonVariants({ size: 'lg', variant: 'outline' })}>Sign in</Link>
         </div>
         <p className="text-sm text-muted-foreground">3 free videos · No credit card</p>
@@ -51,10 +53,10 @@ export default function LandingPage() {
           <h2 className="text-3xl font-bold text-center mb-10">Simple pricing</h2>
           <div className="grid sm:grid-cols-4 gap-6">
             {[
-              { tier: 'Explorer', price: 'Free', desc: '3 videos lifetime', cta: 'Get started' },
-              { tier: 'Creator', price: '£7/mo', desc: '10 videos/month + top-ups', cta: 'Start Creator' },
-              { tier: 'Studio', price: '£19/mo', desc: '40 videos/month + extras', cta: 'Start Studio' },
-              { tier: 'Enterprise', price: '£45/mo', desc: 'Unlimited + team + API', cta: 'Start Enterprise' },
+              { tier: 'Explorer', price: 'Free', desc: '3 videos lifetime', cta: 'Sign up free' },
+              { tier: 'Creator', price: '£7/mo', desc: '10 videos/month + top-ups', cta: 'Sign up' },
+              { tier: 'Studio', price: '£19/mo', desc: '40 videos/month + extras', cta: 'Sign up' },
+              { tier: 'Enterprise', price: '£45/mo', desc: 'Unlimited + team + API', cta: 'Sign up' },
             ].map((p) => (
               <div key={p.tier} className="rounded-lg border bg-background p-6 flex flex-col gap-4">
                 <div>
