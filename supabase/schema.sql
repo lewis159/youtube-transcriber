@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   tier text NOT NULL DEFAULT 'explorer',  -- 'explorer' | 'creator' | 'studio' | 'enterprise'
   subscription_credits integer NOT NULL DEFAULT 3,
   purchased_credits integer NOT NULL DEFAULT 0,
+  role text NOT NULL DEFAULT 'user',  -- 'user' | 'admin'
   stripe_customer_id text,
   created_at timestamptz DEFAULT now()
 );
@@ -57,6 +58,17 @@ CREATE TABLE IF NOT EXISTS share_links (
   token text UNIQUE NOT NULL DEFAULT gen_random_uuid()::text,
   allow_download boolean DEFAULT false,
   expires_at timestamptz,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Credit transactions — audit trail for all credit adjustments
+CREATE TABLE IF NOT EXISTS credit_transactions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  admin_id uuid REFERENCES users(id) ON DELETE SET NULL,  -- NULL if system-generated
+  amount integer NOT NULL,  -- positive for addition, negative for deduction
+  reason text NOT NULL,  -- 'subscription_grant', 'manual_adjustment', 'refund', 'purchase', etc.
+  notes text,  -- admin notes
   created_at timestamptz DEFAULT now()
 );
 
@@ -128,6 +140,7 @@ ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE video_folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE share_links ENABLE ROW LEVEL SECURITY;
+ALTER TABLE credit_transactions ENABLE ROW LEVEL SECURITY;
 
 -- Service role bypasses RLS (used by API routes via supabaseAdmin)
 -- Anon key used only for public share link reads (future)

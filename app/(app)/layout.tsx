@@ -1,15 +1,17 @@
 import { auth } from '@clerk/nextjs/server'
-import { UserButton } from '@clerk/nextjs'
 import Link from 'next/link'
 import { getDbUser } from '@/lib/auth'
+import { UserMenu } from '@/components/UserMenu'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { userId } = await auth()
   let tier: string | null = null
+  let isAdmin = false
   if (userId) {
     try {
       const user = await getDbUser(userId)
       tier = user?.tier ?? null
+      isAdmin = user?.role === 'admin'
     } catch {
       // user row not yet created (webhook pending)
     }
@@ -27,7 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               {tier}
             </span>
           )}
-          <UserButton />
+          <UserMenu isAdmin={isAdmin} />
         </div>
       </header>
       <main className="flex-1 px-6 py-8 max-w-7xl mx-auto w-full">
