@@ -6,6 +6,7 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
     HRFlowable, PageBreak, KeepTogether, Image
 )
+from reportlab.platypus.tableofcontents import TableOfContents
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from datetime import date
 
@@ -49,6 +50,24 @@ def hdr(txt): return Paragraph(txt, table_head)
 def cell(txt): return Paragraph(txt, table_cell)
 def lbl(txt): return Paragraph(txt, table_label)
 
+# ── TOC support ───────────────────────────────────────────────────────────────
+class TOCDocTemplate(SimpleDocTemplate):
+    def afterFlowable(self, flowable):
+        if isinstance(flowable, Paragraph):
+            if flowable.style.name == 'H1':
+                self.notify('TOCEntry', (0, flowable.getPlainText(), self.page))
+
+toc_entry_style = ParagraphStyle(
+    'TOCEntry', fontName='Helvetica', fontSize=10, textColor=DARK_BG,
+    spaceBefore=5, spaceAfter=1, leftIndent=0, leading=14
+)
+
+def build_toc():
+    toc = TableOfContents()
+    toc.levelStyles = [toc_entry_style]
+    toc.dotsMinLevel = 0
+    return toc
+
 TIER_STYLE_BASE = [
     ("BACKGROUND",  (0, 0), (-1, 0), DARK_BG),
     ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_BG]),
@@ -64,7 +83,7 @@ def section_rule():
     return HRFlowable(width="100%", thickness=1, color=MID_GREY, spaceAfter=4, spaceBefore=4)
 
 # ── Document ──────────────────────────────────────────────────────────────────
-doc = SimpleDocTemplate(
+doc = TOCDocTemplate(
     OUTPUT,
     pagesize=A4,
     leftMargin=18*mm, rightMargin=18*mm,
@@ -109,6 +128,12 @@ cover_body.setStyle(TableStyle([
 ]))
 story.append(cover_body)
 story.append(Spacer(1, 10))
+
+# ── Table of Contents ─────────────────────────────────────────────────────────
+story.append(Paragraph("Contents", h1))
+story.append(section_rule())
+story.append(build_toc())
+story.append(PageBreak())
 
 # ── Section 1: Why Clerk ──────────────────────────────────────────────────────
 story.append(Paragraph("1. Why Clerk?", h1))
@@ -563,5 +588,5 @@ story.append(Paragraph(
     "YT Transcriber — Internal Planning Document — Not for Distribution",
     S("Footer", fontSize=7.5, textColor=MID_GREY, fontName="Helvetica", alignment=TA_CENTER)))
 
-doc.build(story)
+doc.multiBuild(story)
 print(f"PDF saved to {OUTPUT}")
