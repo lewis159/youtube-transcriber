@@ -196,7 +196,36 @@ export default function UserManagementPage() {
         {success && <div className="bg-[#0F2A15] border border-[#155A2A] rounded p-2 mb-4"><p className="text-[#4AE070] text-sm">{success}</p></div>}
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-          <div><p className="text-[#888]">Tier</p><p className="text-[#85B7EB] font-semibold">{user.tier}</p></div>
+          <div>
+            <p className="text-[#888] mb-1">Tier</p>
+            <select
+              value={user.tier}
+              onChange={async (e) => {
+                try {
+                  setSubmitting(true)
+                  const response = await fetch(`/api/admin/users/${userId}/tier`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tier: e.target.value }),
+                  })
+                  if (!response.ok) throw new Error('Failed to update tier')
+                  setSuccess('Tier updated')
+                  await fetchUserDetails()
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Failed to update tier')
+                } finally {
+                  setSubmitting(false)
+                }
+              }}
+              disabled={submitting}
+              className="bg-[#0F0F13] border border-[#2A2A35] rounded px-2 py-1 text-[#85B7EB] font-semibold text-sm"
+            >
+              <option value="explorer">Explorer</option>
+              <option value="creator">Creator</option>
+              <option value="studio">Studio</option>
+              <option value="enterprise">Enterprise</option>
+            </select>
+          </div>
           <div><p className="text-[#888]">Role</p><p className="text-[#85B7EB] font-semibold">{user.role}</p></div>
           <div><p className="text-[#888]">Total Credits</p><p className="text-[#85B7EB] font-bold text-lg">{totalCredits}</p></div>
           <div><p className="text-[#888]">Joined</p><p className="text-[#85B7EB]">{new Date(user.created_at).toLocaleDateString()}</p></div>
