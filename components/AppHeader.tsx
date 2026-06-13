@@ -26,6 +26,9 @@ export function AppHeader({ tier, isAdmin }: AppHeaderProps) {
           <Link href="/dashboard" className="text-sm text-[#888] hover:text-white transition-colors">
             Dashboard
           </Link>
+          <Link href="/knowledge-base" className="text-sm text-[#888] hover:text-white transition-colors">
+            Knowledge Base
+          </Link>
           {isAdmin && (
             <div className="relative">
               <button
