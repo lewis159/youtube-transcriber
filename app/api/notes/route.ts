@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from 'next/server'
 import { requireAuth, getDbUser } from '@/lib/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { userHasFeature, featureBlockedResponse } from '@/lib/features'
 
 // GET /api/notes?videoId=xxx
 export async function GET(req: Request) {
@@ -28,11 +29,18 @@ export async function GET(req: Request) {
   }
 }
 
-// PUT /api/notes â€” upsert note for a video
+// PUT /api/notes — upsert note for a video
 export async function PUT(req: Request) {
   try {
     const clerkId = await requireAuth()
     const user = await getDbUser(clerkId)
+
+    // Feature check
+    const hasNotesFeature = await userHasFeature(clerkId, 'notes')
+    if (!hasNotesFeature) {
+      return featureBlockedResponse('notes')
+    }
+
     const { videoId, body } = await req.json()
     if (!videoId) return NextResponse.json({ error: 'videoId required' }, { status: 400 })
 

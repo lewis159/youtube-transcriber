@@ -1,17 +1,14 @@
 import { auth } from '@clerk/nextjs/server'
 import { getSupabaseAdmin } from './supabase'
+import { getDbUser } from './auth'
 
 export async function requireAdmin() {
   const { userId } = await auth()
   if (!userId) throw new Error('Unauthorized')
 
-  const { data: user } = await getSupabaseAdmin()
-    .from('users')
-    .select('role')
-    .eq('clerk_user_id', userId)
-    .single()
-
-  if (user?.role !== 'admin') {
+  const user = await getDbUser(userId)
+  const isAdmin = user.role === 'administrator' || user.role === 'support'
+  if (!isAdmin) {
     throw new Error('Admin access required')
   }
 
@@ -27,6 +24,8 @@ export async function listAllUsers(limit = 50, offset = 0) {
       email,
       tier,
       role,
+      organization_id,
+      organizations(name, slug),
       subscription_credits,
       purchased_credits,
       created_at,
@@ -44,7 +43,7 @@ export async function listAllUsers(limit = 50, offset = 0) {
 export async function getUserDetails(userId: string) {
   const { data: user, error } = await getSupabaseAdmin()
     .from('users')
-    .select('*')
+    .select('*, organizations(name, slug), videos!inner(id)')
     .eq('id', userId)
     .single()
 
@@ -67,7 +66,15 @@ export async function getUserDetails(userId: string) {
     .order('created_at', { ascending: false })
     .limit(20)
 
-  return { user, transactions }
+  // Get user's videos
+  const { data: videos } = await getSupabaseAdmin()
+    .from('videos')
+    .select('id, youtube_id, title, status, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  return { user, transactions, videos }
 }
 
 export async function addCredits(

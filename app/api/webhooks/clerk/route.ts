@@ -35,13 +35,38 @@ export async function POST(req: Request) {
 
   if (event.type === 'user.created') {
     const email = event.data.email_addresses[0]?.email_address ?? ''
+
+    // Create organization for user (one org per user)
+    const emailPrefix = email.split('@')[0]
+    const { data: org, error: orgError } = await getSupabaseAdmin()
+      .from('organizations')
+      .insert({ name: `${email}'s Workspace`, slug: `${emailPrefix}-${event.data.id.slice(0, 8)}` })
+      .select()
+      .single()
+
+    if (orgError) throw orgError
+
+    // Create user linked to organization
     await getSupabaseAdmin().from('users').insert({
       clerk_user_id: event.data.id,
       email,
       tier: 'explorer',
+      role: 'user',
+      organization_id: org.id,
       subscription_credits: 3,
       purchased_credits: 0,
     })
+  } else if (event.type === 'user.updated') {
+    const email = event.data.email_addresses[0]?.email_address ?? ''
+    await getSupabaseAdmin()
+      .from('users')
+      .update({ email })
+      .eq('clerk_user_id', event.data.id)
+  } else if (event.type === 'user.deleted') {
+    await getSupabaseAdmin()
+      .from('users')
+      .delete()
+      .eq('clerk_user_id', event.data.id)
   }
 
   return NextResponse.json({ received: true })

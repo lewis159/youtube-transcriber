@@ -4,18 +4,7 @@ import { cn } from '@/lib/utils'
 
 export default function LandingPage() {
   return (
-    <main className="flex flex-col min-h-screen">
-      {/* Nav */}
-      <header className="border-b px-6 py-4 flex items-center justify-between">
-        <Link href="/">
-          <img src="/logos/logo_full.png" alt="YT Transcriber" className="h-7 w-auto" />
-        </Link>
-        <div className="flex gap-3">
-          <Link href="/sign-in" className={buttonVariants({ variant: 'ghost' })}>Sign in</Link>
-          <Link href="/sign-up" className={buttonVariants({ variant: 'default' })}>Sign up</Link>
-        </div>
-      </header>
-
+    <main className="flex flex-col flex-1">
       {/* Hero */}
       <section className="flex flex-col items-center justify-center flex-1 text-center px-6 py-24 gap-6">
         <h1 className="text-5xl font-bold tracking-tight max-w-2xl">
@@ -76,8 +65,50 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <footer className="border-t px-6 py-6 text-center text-sm text-muted-foreground">
-        © {new Date().getFullYear()} YT Transcriber
+      {/* Guides CTA */}
+      <section className="border-t px-6 py-12">
+        <div className="max-w-5xl mx-auto text-center">
+          <h2 className="text-2xl font-bold mb-4">Learn how to use YT Transcriber</h2>
+          <p className="text-muted-foreground mb-6">
+            Check out our guides to get the most out of your transcripts.
+          </p>
+          <Link href="/guides" className={buttonVariants({ size: 'lg', variant: 'outline' })}>
+            View Guides →
+          </Link>
+        </div>
+      </section>
+
+      <footer className="border-t px-6 py-8">
+        <div className="max-w-5xl mx-auto">
+          <div className="grid sm:grid-cols-3 gap-8 mb-8">
+            <div>
+              <h3 className="font-semibold mb-3">Product</h3>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li><Link href="/guides" className="hover:text-foreground transition-colors">Guides</Link></li>
+                <li><Link href="#" className="hover:text-foreground transition-colors">Pricing</Link></li>
+                <li><Link href="#" className="hover:text-foreground transition-colors">Status</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-3">Company</h3>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li><Link href="#" className="hover:text-foreground transition-colors">About</Link></li>
+                <li><Link href="#" className="hover:text-foreground transition-colors">Blog</Link></li>
+                <li><Link href="#" className="hover:text-foreground transition-colors">Contact</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-3">Legal</h3>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li><Link href="#" className="hover:text-foreground transition-colors">Privacy</Link></li>
+                <li><Link href="#" className="hover:text-foreground transition-colors">Terms</Link></li>
+              </ul>
+            </div>
+          </div>
+          <div className="border-t pt-8 text-center text-sm text-muted-foreground">
+            © {new Date().getFullYear()} YT Transcriber. All rights reserved.
+          </div>
+        </div>
       </footer>
     </main>
   )
