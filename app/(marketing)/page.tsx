@@ -1,5 +1,6 @@
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 export default function LandingPage() {
   return (
@@ -8,12 +9,8 @@ export default function LandingPage() {
       <header className="border-b px-6 py-4 flex items-center justify-between">
         <span className="font-semibold text-lg">YT Transcriber</span>
         <div className="flex gap-3">
-          <Link href="/sign-in">
-            <Button variant="ghost">Sign in</Button>
-          </Link>
-          <Link href="/sign-up">
-            <Button>Start free</Button>
-          </Link>
+          <Link href="/sign-in" className={buttonVariants({ variant: 'ghost' })}>Sign in</Link>
+          <Link href="/sign-up" className={buttonVariants({ variant: 'default' })}>Start free</Link>
         </div>
       </header>
 
@@ -26,12 +23,8 @@ export default function LandingPage() {
           Paste a URL, get a full transcript in seconds. Add notes, export PDFs, share with your team.
         </p>
         <div className="flex gap-4">
-          <Link href="/sign-up">
-            <Button size="lg">Start free — no card needed</Button>
-          </Link>
-          <Link href="/sign-in">
-            <Button size="lg" variant="outline">Sign in</Button>
-          </Link>
+          <Link href="/sign-up" className={buttonVariants({ size: 'lg' })}>Start free — no card needed</Link>
+          <Link href="/sign-in" className={buttonVariants({ size: 'lg', variant: 'outline' })}>Sign in</Link>
         </div>
         <p className="text-sm text-muted-foreground">3 free videos · No credit card</p>
       </section>
@@ -69,10 +62,11 @@ export default function LandingPage() {
                   <p className="text-2xl font-bold">{p.price}</p>
                   <p className="text-sm text-muted-foreground">{p.desc}</p>
                 </div>
-                <Link href="/sign-up" className="mt-auto">
-                  <Button className="w-full" variant={p.tier === 'Studio' ? 'default' : 'outline'}>
-                    {p.cta}
-                  </Button>
+                <Link
+                  href="/sign-up"
+                  className={cn('mt-auto', buttonVariants({ variant: p.tier === 'Studio' ? 'default' : 'outline' }))}
+                >
+                  {p.cta}
                 </Link>
               </div>
             ))}
