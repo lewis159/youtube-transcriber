@@ -19,7 +19,34 @@ export default async function DashboardPage() {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
-  const user = await getDbUser(userId)
+  let user: Awaited<ReturnType<typeof getDbUser>> | null = null
+  let dbError: string | null = null
+  try {
+    user = await getDbUser(userId)
+  } catch (e: unknown) {
+    const asAny = e as Record<string, unknown>
+    const code = asAny?.code ?? ''
+    const msg = (e instanceof Error ? e.message : '') + JSON.stringify(e)
+    if (code === 'PGRST205' || msg.includes('PGRST205') || msg.includes('schema cache')) {
+      dbError = 'Database schema not yet applied. Please run supabase/schema.sql in your Supabase SQL Editor.'
+    } else if (code === 'PGRST116' || msg.includes('PGRST116') || msg.includes('0 rows')) {
+      dbError = 'Your account is being set up — the Clerk webhook may not have fired yet. Please wait a moment and refresh.'
+    } else {
+      dbError = 'Could not load your profile. Please try again shortly.'
+    }
+  }
+
+  if (dbError || !user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
+        <div className="bg-[#18181F] border border-[#2A2A35] rounded-lg p-8 max-w-lg">
+          <p className="text-sm font-medium text-[#E04B4A] mb-2">Setup required</p>
+          <p className="text-sm text-[#888]">{dbError ?? 'Your account is being set up. Please refresh in a moment.'}</p>
+        </div>
+      </div>
+    )
+  }
+
   const totalCredits = (user.subscription_credits ?? 0) + (user.purchased_credits ?? 0)
 
   const { data: videos } = await getSupabaseAdmin()
