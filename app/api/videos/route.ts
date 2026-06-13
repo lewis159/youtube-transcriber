@@ -3,6 +3,7 @@ import { requireAuth, getDbUser } from '@/lib/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { extractVideoId, fetchVideoMeta } from '@/lib/youtube'
 import { fetchTranscript } from '@/lib/transcript'
+import { userHasFeature, featureBlockedResponse } from '@/lib/features'
 
 // GET /api/videos â€” list all videos for the current user
 export async function GET() {
@@ -30,6 +31,12 @@ export async function POST(req: Request) {
   try {
     const clerkId = await requireAuth()
     const user = await getDbUser(clerkId)
+
+    // Feature check
+    const hasTranscribeFeature = await userHasFeature(clerkId, 'transcribe')
+    if (!hasTranscribeFeature) {
+      return featureBlockedResponse('transcribe')
+    }
 
     // Credit check
     const totalCredits = user.subscription_credits + user.purchased_credits

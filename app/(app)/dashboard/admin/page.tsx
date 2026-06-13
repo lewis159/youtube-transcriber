@@ -2,37 +2,55 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { requireAdmin } from '@/lib/admin'
 
 interface User {
   id: string
   email: string
   tier: string
   role: string
+  organization_id: string
+  organizations: { name: string; slug: string } | null
   subscription_credits: number
   purchased_credits: number
   created_at: string
 }
 
+interface Organization {
+  id: string
+  name: string
+  slug: string
+  created_at: string
+}
+
 export default function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([])
+  const [organizations, setOrganizations] = useState<Organization[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [activeTab, setActiveTab] = useState<'users' | 'orgs'>('users')
 
   useEffect(() => {
-    fetchUsers()
+    fetchData()
   }, [])
 
-  const fetchUsers = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/admin/users?limit=100')
-      if (!response.ok) throw new Error('Failed to fetch users')
-      const { users, total } = await response.json()
-      setUsers(users)
-      setTotal(total)
+      const [usersRes, orgsRes] = await Promise.all([
+        fetch('/api/admin/users?limit=100'),
+        fetch('/api/organizations')
+      ])
+
+      if (!usersRes.ok || !orgsRes.ok) throw new Error('Failed to fetch data')
+
+      const usersData = await usersRes.json()
+      const orgsData = await orgsRes.json()
+
+      setUsers(usersData.users || [])
+      setTotal(usersData.total || 0)
+      setOrganizations(orgsData || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
@@ -45,136 +63,139 @@ export default function AdminDashboard() {
   )
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-[#888]">Loading users...</div>
-      </div>
-    )
+    return <div className="flex items-center justify-center py-12"><div className="text-[#888]">Loading...</div></div>
   }
 
   if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="bg-[#18181F] border border-[#2A2A35] rounded-lg p-6 max-w-lg">
-          <p className="text-[#E04B4A]">Error: {error}</p>
-        </div>
-      </div>
-    )
+    return <div className="bg-[#18181F] border border-[#E04B4A] rounded-lg p-6"><p className="text-[#E04B4A]">Error: {error}</p></div>
   }
 
   return (
-    <div className="min-h-screen bg-[#0F0F13] p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Admin Dashboard</h1>
-          <p className="text-[#888]">Manage users, credits, and accounts</p>
-        </div>
+    <div className="flex flex-col gap-8">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-white mb-2">Admin Dashboard</h1>
+        <p className="text-[#888]">Manage users, organizations, and system settings</p>
+      </div>
 
-        {/* Search */}
-        <div className="mb-6">
+      {/* Tabs */}
+      <div className="flex gap-4 border-b border-[#2A2A35]">
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`px-4 py-2 font-medium transition-colors border-b-2 ${
+            activeTab === 'users'
+              ? 'border-[#378ADD] text-white'
+              : 'border-transparent text-[#888] hover:text-white'
+          }`}
+        >
+          Users ({total})
+        </button>
+        <button
+          onClick={() => setActiveTab('orgs')}
+          className={`px-4 py-2 font-medium transition-colors border-b-2 ${
+            activeTab === 'orgs'
+              ? 'border-[#378ADD] text-white'
+              : 'border-transparent text-[#888] hover:text-white'
+          }`}
+        >
+          Organizations ({organizations.length})
+        </button>
+      </div>
+
+      {/* Users Tab */}
+      {activeTab === 'users' && (
+        <div className="flex flex-col gap-6">
           <input
             type="text"
             placeholder="Search by email..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full px-4 py-2 bg-[#18181F] border border-[#2A2A35] rounded-lg text-white placeholder-[#666]"
+            className="px-4 py-2 bg-[#18181F] border border-[#2A2A35] rounded-lg text-white placeholder-[#666]"
           />
-        </div>
 
-        {/* Users Table */}
-        <div className="bg-[#18181F] border border-[#2A2A35] rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-[#0F0F13] border-b border-[#2A2A35]">
-                <tr>
-                  <th className="px-4 py-3 text-left font-semibold text-white">
-                    Email
-                  </th>
-                  <th className="px-4 py-3 text-left font-semibold text-white">
-                    Tier
-                  </th>
-                  <th className="px-4 py-3 text-left font-semibold text-white">
-                    Sub Credits
-                  </th>
-                  <th className="px-4 py-3 text-left font-semibold text-white">
-                    Purchased
-                  </th>
-                  <th className="px-4 py-3 text-left font-semibold text-white">
-                    Total
-                  </th>
-                  <th className="px-4 py-3 text-left font-semibold text-white">
-                    Role
-                  </th>
-                  <th className="px-4 py-3 text-left font-semibold text-white">
-                    Joined
-                  </th>
-                  <th className="px-4 py-3 text-left font-semibold text-white">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.length === 0 ? (
+          <div className="bg-[#18181F] border border-[#2A2A35] rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-[#0F0F13] border-b border-[#2A2A35]">
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-[#888]">
-                      No users found
-                    </td>
+                    <th className="px-4 py-3 text-left font-semibold text-white">Email</th>
+                    <th className="px-4 py-3 text-left font-semibold text-white">Organization</th>
+                    <th className="px-4 py-3 text-left font-semibold text-white">Tier</th>
+                    <th className="px-4 py-3 text-left font-semibold text-white">Credits</th>
+                    <th className="px-4 py-3 text-left font-semibold text-white">Role</th>
+                    <th className="px-4 py-3 text-left font-semibold text-white">Joined</th>
+                    <th className="px-4 py-3 text-left font-semibold text-white">Action</th>
                   </tr>
-                ) : (
-                  filteredUsers.map(user => (
-                    <tr
-                      key={user.id}
-                      className="border-b border-[#2A2A35] hover:bg-[#242429] transition-colors"
-                    >
-                      <td className="px-4 py-3 text-white">{user.email}</td>
-                      <td className="px-4 py-3">
-                        <span className="px-2 py-1 bg-[#2A2A35] rounded text-[#85B7EB] text-xs">
-                          {user.tier}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-[#888]">
-                        {user.subscription_credits}
-                      </td>
-                      <td className="px-4 py-3 text-[#888]">
-                        {user.purchased_credits}
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-[#85B7EB]">
-                        {user.subscription_credits + user.purchased_credits}
-                      </td>
-                      <td className="px-4 py-3">
-                        {user.role === 'admin' ? (
-                          <span className="px-2 py-1 bg-[#378ADD] rounded text-white text-xs">
-                            Admin
-                          </span>
-                        ) : (
-                          <span className="text-[#888] text-xs">User</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-[#888]">
-                        {new Date(user.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/dashboard/admin/users/${user.id}`}
-                          className="text-[#378ADD] hover:text-[#85B7EB] transition-colors"
-                        >
-                          Manage
-                        </Link>
-                      </td>
+                </thead>
+                <tbody>
+                  {filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-[#888]">No users found</td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    filteredUsers.map(user => (
+                      <tr key={user.id} className="border-b border-[#2A2A35] hover:bg-[#242429]">
+                        <td className="px-4 py-3 text-white font-medium">{user.email}</td>
+                        <td className="px-4 py-3 text-[#888]">{user.organizations?.name || 'N/A'}</td>
+                        <td className="px-4 py-3">
+                          <span className="px-2 py-1 bg-[#2A2A35] rounded text-[#85B7EB] text-xs">
+                            {user.tier}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-[#85B7EB]">
+                          {user.subscription_credits + user.purchased_credits}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            user.role === 'administrator' ? 'bg-[#378ADD] text-white' :
+                            user.role === 'org_admin' ? 'bg-[#2A5A3D] text-[#4AE070]' :
+                            user.role === 'support' ? 'bg-[#5A4A2A] text-[#E0B04A]' :
+                            'bg-[#2A2A35] text-[#888]'
+                          }`}>
+                            {user.role}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-[#888] text-xs">
+                          {new Date(user.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Link
+                            href={`/dashboard/admin/users/${user.id}`}
+                            className="text-[#378ADD] hover:text-[#85B7EB] text-sm"
+                          >
+                            Manage →
+                          </Link>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Stats Footer */}
-        <div className="mt-6 text-sm text-[#888]">
-          Showing {filteredUsers.length} of {total} users
+      {/* Organizations Tab */}
+      {activeTab === 'orgs' && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {organizations.map(org => (
+            <div key={org.id} className="bg-[#18181F] border border-[#2A2A35] rounded-lg p-6 hover:border-[#378ADD] transition-colors">
+              <h3 className="font-semibold text-white mb-2">{org.name}</h3>
+              <p className="text-sm text-[#888] mb-4">@{org.slug}</p>
+              <p className="text-xs text-[#666] mb-4">
+                Created {new Date(org.created_at).toLocaleDateString()}
+              </p>
+              <Link
+                href={`/dashboard/admin/organizations/${org.id}`}
+                className="text-[#378ADD] hover:text-[#85B7EB] text-sm"
+              >
+                Manage members →
+              </Link>
+            </div>
+          ))}
         </div>
-      </div>
+      )}
     </div>
   )
 }
