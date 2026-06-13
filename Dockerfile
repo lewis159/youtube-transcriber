@@ -52,4 +52,8 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+# Health check: GET /api/health with 30s interval, 3 retries, 10s timeout
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=5s \
+  CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => { if (r.statusCode !== 200) throw new Error(r.statusCode); })" || exit 1
+
 CMD ["node", "server.js"]
