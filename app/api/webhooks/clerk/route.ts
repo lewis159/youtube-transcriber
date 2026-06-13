@@ -1,7 +1,7 @@
-import { headers } from 'next/headers'
+﻿import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { Webhook } from 'svix'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 type ClerkUserEvent = {
   type: string
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
 
   if (event.type === 'user.created') {
     const email = event.data.email_addresses[0]?.email_address ?? ''
-    await supabaseAdmin.from('users').insert({
+    await getSupabaseAdmin().from('users').insert({
       clerk_user_id: event.data.id,
       email,
       tier: 'explorer',
@@ -46,3 +46,4 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ received: true })
 }
+

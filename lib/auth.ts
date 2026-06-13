@@ -1,5 +1,5 @@
-import { auth } from '@clerk/nextjs/server'
-import { supabaseAdmin } from './supabase'
+﻿import { auth } from '@clerk/nextjs/server'
+import { getSupabaseAdmin } from './supabase'
 
 export async function requireAuth() {
   const { userId } = await auth()
@@ -8,7 +8,7 @@ export async function requireAuth() {
 }
 
 export async function getDbUser(clerkUserId: string) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await getSupabaseAdmin()
     .from('users')
     .select('*')
     .eq('clerk_user_id', clerkUserId)
@@ -16,3 +16,4 @@ export async function getDbUser(clerkUserId: string) {
   if (error) throw error
   return data
 }
+

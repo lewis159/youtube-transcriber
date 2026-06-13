@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getDbUser } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { userHasFeature } from '@/lib/features'
 import { formatTimestamp, type TranscriptSegment } from '@/lib/transcript'
 import NoteEditor from '@/components/NoteEditor'
@@ -20,7 +20,7 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
   const user = await getDbUser(userId)
   const canExportPdf = await userHasFeature(userId, 'export_pdf')
 
-  const { data: video } = await supabaseAdmin
+  const { data: video } = await getSupabaseAdmin()
     .from('videos')
     .select('*, transcripts(*), notes(*)')
     .eq('id', id)

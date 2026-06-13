@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAuth, getDbUser } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -11,7 +11,7 @@ export async function GET(_req: Request, { params }: Params) {
     const clerkId = await requireAuth()
     const user = await getDbUser(clerkId)
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await getSupabaseAdmin()
       .from('videos')
       .select('*, transcripts(*), notes(*)')
       .eq('id', id)
@@ -34,7 +34,7 @@ export async function DELETE(_req: Request, { params }: Params) {
     const clerkId = await requireAuth()
     const user = await getDbUser(clerkId)
 
-    const { error } = await supabaseAdmin
+    const { error } = await getSupabaseAdmin()
       .from('videos')
       .delete()
       .eq('id', id)

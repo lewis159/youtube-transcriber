@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { getDbUser } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import VideoSubmitForm from '@/components/VideoSubmitForm'
 import { Badge } from '@/components/ui/badge'
 
@@ -21,9 +21,9 @@ export default async function DashboardPage() {
   if (!userId) redirect('/sign-in')
 
   const user = await getDbUser(userId)
-  const totalCredits = user.subscription_credits + user.purchased_credits
+  const totalCredits = (user.subscription_credits ?? 0) + (user.purchased_credits ?? 0)
 
-  const { data: videos } = await supabaseAdmin
+  const { data: videos } = await getSupabaseAdmin()
     .from('videos')
     .select('id, youtube_id, title, thumbnail, status, created_at')
     .eq('user_id', user.id)
@@ -33,26 +33,23 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-1 capitalize">
-            {user.tier} · {totalCredits} credit{totalCredits !== 1 ? 's' : ''} remaining
+            {user.tier} &middot; {totalCredits} credit{totalCredits !== 1 ? 's' : ''} remaining
           </p>
         </div>
       </div>
 
-      {/* Submit form */}
       <div className="rounded-lg border p-6 flex flex-col gap-4">
         <p className="font-medium">Transcribe a YouTube video</p>
         <VideoSubmitForm />
       </div>
 
-      {/* Video list */}
       {videoList.length === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-          No videos yet — paste a YouTube URL above to get started.
+          No videos yet &mdash; paste a YouTube URL above to get started.
         </div>
       ) : (
         <div className="flex flex-col gap-1">
@@ -71,7 +68,7 @@ export default async function DashboardPage() {
                 )}
                 <div className="flex flex-col gap-1 min-w-0">
                   <p className="text-sm font-medium leading-tight line-clamp-2 group-hover:text-primary">
-                    {v.title ?? 'Processing…'}
+                    {v.title ?? 'Processing...'}
                   </p>
                   <div className="flex items-center gap-2 mt-auto">
                     <Badge variant={v.status === 'done' ? 'default' : v.status === 'error' ? 'destructive' : 'secondary'} className="text-xs">

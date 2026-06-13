@@ -1,16 +1,16 @@
-import { NextResponse } from 'next/server'
+﻿import { NextResponse } from 'next/server'
 import { requireAuth, getDbUser } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { extractVideoId, fetchVideoMeta } from '@/lib/youtube'
 import { fetchTranscript } from '@/lib/transcript'
 
-// GET /api/videos — list all videos for the current user
+// GET /api/videos â€” list all videos for the current user
 export async function GET() {
   try {
     const clerkId = await requireAuth()
     const user = await getDbUser(clerkId)
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await getSupabaseAdmin()
       .from('videos')
       .select('id, youtube_id, title, thumbnail, status, created_at')
       .eq('user_id', user.id)
@@ -25,7 +25,7 @@ export async function GET() {
   }
 }
 
-// POST /api/videos — submit a YouTube URL, fetch metadata + transcript
+// POST /api/videos â€” submit a YouTube URL, fetch metadata + transcript
 export async function POST(req: Request) {
   try {
     const clerkId = await requireAuth()
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     }
 
     // Check for duplicate
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await getSupabaseAdmin()
       .from('videos')
       .select('id')
       .eq('user_id', user.id)
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
     }
 
     // Create video record
-    const { data: video, error: insertErr } = await supabaseAdmin
+    const { data: video, error: insertErr } = await getSupabaseAdmin()
       .from('videos')
       .insert({ user_id: user.id, youtube_id: videoId, status: 'processing' })
       .select()
@@ -72,25 +72,25 @@ export async function POST(req: Request) {
         fetchTranscript(videoId),
       ])
 
-      await supabaseAdmin
+      await getSupabaseAdmin()
         .from('videos')
         .update({ title: meta.title, thumbnail: meta.thumbnail, status: 'done' })
         .eq('id', video.id)
 
-      await supabaseAdmin
+      await getSupabaseAdmin()
         .from('transcripts')
         .insert({ video_id: video.id, content: segments, language: 'en' })
 
       // Deduct credit
       if (user.purchased_credits > 0) {
-        await supabaseAdmin.from('users').update({ purchased_credits: user.purchased_credits - 1 }).eq('id', user.id)
+        await getSupabaseAdmin().from('users').update({ purchased_credits: user.purchased_credits - 1 }).eq('id', user.id)
       } else {
-        await supabaseAdmin.from('users').update({ subscription_credits: user.subscription_credits - 1 }).eq('id', user.id)
+        await getSupabaseAdmin().from('users').update({ subscription_credits: user.subscription_credits - 1 }).eq('id', user.id)
       }
 
       return NextResponse.json({ id: video.id, title: meta.title, status: 'done' }, { status: 201 })
     } catch (fetchErr) {
-      await supabaseAdmin.from('videos').update({ status: 'error', error_message: String(fetchErr) }).eq('id', video.id)
+      await getSupabaseAdmin().from('videos').update({ status: 'error', error_message: String(fetchErr) }).eq('id', video.id)
       return NextResponse.json({ error: 'transcript_failed', id: video.id, message: String(fetchErr) }, { status: 422 })
     }
   } catch (err) {
@@ -99,3 +99,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: msg }, { status })
   }
 }
+

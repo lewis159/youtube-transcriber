@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server'
+﻿import { NextResponse } from 'next/server'
 import { requireAuth, getDbUser } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { userHasFeature } from '@/lib/features'
 import { transcriptToPlainText, type TranscriptSegment } from '@/lib/transcript'
 import JSZip from 'jszip'
@@ -22,7 +22,7 @@ export async function GET(req: Request) {
     }
 
     // Fetch video + transcript + notes (must belong to this user)
-    const { data: video, error } = await supabaseAdmin
+    const { data: video, error } = await getSupabaseAdmin()
       .from('videos')
       .select('*, transcripts(*), notes(*)')
       .eq('id', videoId)
@@ -129,3 +129,4 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: msg }, { status })
   }
 }
+

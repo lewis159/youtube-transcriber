@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server'
+﻿import { NextResponse } from 'next/server'
 import { requireAuth, getDbUser } from '@/lib/auth'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 // GET /api/notes?videoId=xxx
 export async function GET(req: Request) {
@@ -12,7 +12,7 @@ export async function GET(req: Request) {
     const clerkId = await requireAuth()
     const user = await getDbUser(clerkId)
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await getSupabaseAdmin()
       .from('notes')
       .select('id, body, updated_at')
       .eq('video_id', videoId)
@@ -28,7 +28,7 @@ export async function GET(req: Request) {
   }
 }
 
-// PUT /api/notes — upsert note for a video
+// PUT /api/notes â€” upsert note for a video
 export async function PUT(req: Request) {
   try {
     const clerkId = await requireAuth()
@@ -36,7 +36,7 @@ export async function PUT(req: Request) {
     const { videoId, body } = await req.json()
     if (!videoId) return NextResponse.json({ error: 'videoId required' }, { status: 400 })
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await getSupabaseAdmin()
       .from('notes')
       .upsert(
         { video_id: videoId, user_id: user.id, body, updated_at: new Date().toISOString() },
@@ -53,3 +53,4 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: msg }, { status })
   }
 }
+
