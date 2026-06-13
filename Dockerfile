@@ -5,7 +5,7 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install --prefer-offline --no-audit
 
 # Build — NEXT_PUBLIC_ vars must be present at build time (baked into JS bundle)
 FROM base AS builder
