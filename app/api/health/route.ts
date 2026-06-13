@@ -26,16 +26,16 @@ function trackReboot() {
   const oneHourAgo = now - 3600000; // 1 hour in milliseconds
 
   try {
-    let rebootData = { reboots: [] };
+    let rebootData: { reboots: number[] } = { reboots: [] };
 
     // Read existing reboot data if it exists
     if (fs.existsSync(rebootFile)) {
       const content = fs.readFileSync(rebootFile, 'utf-8');
-      rebootData = JSON.parse(content);
+      rebootData = JSON.parse(content) as { reboots: number[] };
     }
 
     // Add current reboot timestamp
-    rebootData.reboots.push(now);
+    (rebootData.reboots as number[]).push(now);
 
     // Remove reboots older than 1 hour
     rebootData.reboots = rebootData.reboots.filter(ts => ts > oneHourAgo);
