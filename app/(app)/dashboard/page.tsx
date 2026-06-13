@@ -1,6 +1,5 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
-import Image from 'next/image'
 import Link from 'next/link'
 import { getDbUser } from '@/lib/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
@@ -33,48 +32,68 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1 capitalize">
-            {user.tier} &middot; {totalCredits} credit{totalCredits !== 1 ? 's' : ''} remaining
-          </p>
+      {/* Stats row */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <div className="bg-[#18181F] border border-[#2A2A35] rounded-lg px-4 py-3">
+          <p className="text-2xl font-medium text-[#85B7EB]">{videoList.length}</p>
+          <p className="text-xs text-[#555] mt-0.5">Videos saved</p>
+        </div>
+        <div className="bg-[#18181F] border border-[#2A2A35] rounded-lg px-4 py-3">
+          <p className="text-2xl font-medium text-[#85B7EB]">{totalCredits}</p>
+          <p className="text-xs text-[#555] mt-0.5">Credits remaining</p>
+        </div>
+        <div className="bg-[#18181F] border border-[#2A2A35] rounded-lg px-4 py-3 capitalize">
+          <p className="text-2xl font-medium text-[#85B7EB]">{user.tier}</p>
+          <p className="text-xs text-[#555] mt-0.5">Current plan</p>
         </div>
       </div>
 
-      <div className="rounded-lg border p-6 flex flex-col gap-4">
-        <p className="font-medium">Transcribe a YouTube video</p>
+      {/* Submit */}
+      <div className="bg-[#18181F] border border-[#2A2A35] rounded-lg p-5 flex flex-col gap-3">
+        <p className="text-sm font-medium text-[#E2E2E8]">Transcribe a YouTube video</p>
         <VideoSubmitForm />
       </div>
 
+      {/* Video grid */}
       {videoList.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
+        <div className="rounded-lg border border-dashed border-[#2A2A35] p-12 text-center text-[#555]">
           No videos yet &mdash; paste a YouTube URL above to get started.
         </div>
       ) : (
-        <div className="flex flex-col gap-1">
-          <h2 className="font-semibold mb-2">Your videos</h2>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium text-[#888]">Recent videos</h2>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {videoList.map((v) => (
-              <Link key={v.id} href={`/video/${v.id}`} className="group rounded-lg border p-3 flex gap-3 hover:bg-muted/50 transition-colors">
-                {v.thumbnail && (
-                  <Image
+              <Link
+                key={v.id}
+                href={`/video/${v.id}`}
+                className="group bg-[#18181F] border border-[#2A2A35] rounded-lg overflow-hidden hover:border-[#185FA5] transition-colors"
+              >
+                {v.thumbnail ? (
+                  <img
                     src={v.thumbnail}
                     alt={v.title ?? ''}
-                    width={96}
-                    height={54}
-                    className="rounded object-cover flex-shrink-0"
+                    className="w-full aspect-video object-cover"
                   />
+                ) : (
+                  <div className="w-full aspect-video bg-[#042C53] flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#378ADD" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  </div>
                 )}
-                <div className="flex flex-col gap-1 min-w-0">
-                  <p className="text-sm font-medium leading-tight line-clamp-2 group-hover:text-primary">
-                    {v.title ?? 'Processing...'}
+                <div className="p-3 flex flex-col gap-1.5">
+                  <p className="text-sm font-medium text-[#E2E2E8] leading-tight line-clamp-2 group-hover:text-[#85B7EB] transition-colors">
+                    {v.title ?? 'Processing…'}
                   </p>
-                  <div className="flex items-center gap-2 mt-auto">
-                    <Badge variant={v.status === 'done' ? 'default' : v.status === 'error' ? 'destructive' : 'secondary'} className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant={v.status === 'done' ? 'default' : v.status === 'error' ? 'destructive' : 'secondary'}
+                      className="text-xs"
+                    >
                       {v.status}
                     </Badge>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-[#555]">
                       {new Date(v.created_at).toLocaleDateString()}
                     </span>
                   </div>

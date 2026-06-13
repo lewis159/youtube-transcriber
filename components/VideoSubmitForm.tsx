@@ -43,8 +43,8 @@ export default function VideoSubmitForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-      <div className="flex gap-3">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+      <div className="flex gap-2">
         <Input
           type="url"
           placeholder="https://youtube.com/watch?v=..."
@@ -52,9 +52,13 @@ export default function VideoSubmitForm() {
           onChange={(e) => setUrl(e.target.value)}
           required
           disabled={loading}
-          className="flex-1"
+          className="flex-1 bg-[#0F0F13] border-[#2A2A35] text-[#E2E2E8] placeholder:text-[#444] focus-visible:ring-[#378ADD]"
         />
-        <Button type="submit" disabled={loading || !url}>
+        <Button
+          type="submit"
+          disabled={loading || !url}
+          className="bg-[#185FA5] hover:bg-[#0C447C] text-white border-0 whitespace-nowrap"
+        >
           {loading ? 'Transcribing…' : 'Transcribe'}
         </Button>
       </div>

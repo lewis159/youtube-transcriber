@@ -4,13 +4,11 @@ import Link from 'next/link'
 import { getDbUser } from '@/lib/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { userHasFeature } from '@/lib/features'
-import { formatTimestamp, type TranscriptSegment } from '@/lib/transcript'
-import NoteEditor from '@/components/NoteEditor'
+import { type TranscriptSegment } from '@/lib/transcript'
 import ExportButtons from '@/components/ExportButtons'
 import DeleteVideoButton from '@/components/DeleteVideoButton'
+import VideoDetailTabs from '@/components/VideoDetailTabs'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
 
 export default async function VideoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -33,84 +31,71 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
   const noteBody = (video.notes as Array<{ body: string }> | null)?.[0]?.body ?? ''
 
   return (
-    <div className="flex flex-col gap-6">
-      <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">
-        ← Back to dashboard
-      </Link>
+    <div className="flex gap-6 -mt-2">
+      {/* Left column */}
+      <div className="w-[320px] flex-shrink-0 flex flex-col gap-4">
+        <Link href="/dashboard" className="flex items-center gap-1.5 text-xs text-[#555] hover:text-[#888] transition-colors w-fit">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+          Dashboard
+        </Link>
 
-      <div className="flex flex-col gap-2">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="text-xl font-bold leading-tight">{video.title ?? 'Untitled video'}</h1>
-          <Badge variant={video.status === 'done' ? 'default' : video.status === 'error' ? 'destructive' : 'secondary'}>
+        <div>
+          <h1 className="text-base font-medium text-[#E2E2E8] leading-snug">
+            {video.title ?? 'Untitled video'}
+          </h1>
+          <a
+            href={`https://youtube.com/watch?v=${video.youtube_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-[#555] hover:text-[#378ADD] transition-colors mt-1 inline-block"
+          >
+            youtube.com/watch?v={video.youtube_id}
+          </a>
+        </div>
+
+        <div className="bg-[#042C53] border border-[#185FA5] rounded-lg overflow-hidden aspect-video flex items-center justify-center">
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${video.youtube_id}`}
+            title={video.title ?? 'YouTube video'}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            className="w-full h-full"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Badge
+            variant={video.status === 'done' ? 'default' : video.status === 'error' ? 'destructive' : 'secondary'}
+            className="text-xs"
+          >
             {video.status}
           </Badge>
+          <span className="text-xs text-[#555]">
+            {new Date(video.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+          </span>
         </div>
-        <a
-          href={`https://youtube.com/watch?v=${video.youtube_id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          youtube.com/watch?v={video.youtube_id}
-        </a>
+
+        <div className="border-t border-[#2A2A35] pt-4 flex flex-col gap-2">
+          <p className="text-xs font-medium text-[#888]">Export</p>
+          <ExportButtons videoId={id} canExportPdf={canExportPdf} />
+        </div>
+
+        <div className="border-t border-[#2A2A35] pt-3 flex justify-end">
+          <DeleteVideoButton videoId={id} />
+        </div>
       </div>
 
-      <div className="aspect-video w-full max-w-2xl rounded-lg overflow-hidden border">
-        <iframe
-          src={`https://www.youtube-nocookie.com/embed/${video.youtube_id}`}
-          title={video.title ?? 'YouTube video'}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          className="w-full h-full"
+      {/* Right column */}
+      <div className="flex-1 bg-[#18181F] border border-[#2A2A35] rounded-lg overflow-hidden flex flex-col">
+        <VideoDetailTabs
+          videoId={id}
+          youtubeId={video.youtube_id}
+          segments={transcript?.content ?? null}
+          initialNote={noteBody}
+          status={video.status}
+          errorMessage={video.error_message}
         />
       </div>
-
-      <ExportButtons videoId={id} canExportPdf={canExportPdf} />
-
-      <Separator />
-
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Transcript */}
-        <div className="flex flex-col gap-2">
-          <h2 className="font-semibold">Transcript</h2>
-          {video.status === 'error' && (
-            <p className="text-sm text-destructive">{video.error_message ?? 'Transcript failed to load.'}</p>
-          )}
-          {video.status === 'processing' && (
-            <p className="text-sm text-muted-foreground">Processing…</p>
-          )}
-          {transcript ? (
-            <ScrollArea className="h-[480px] rounded-md border p-4">
-              <div className="flex flex-col gap-3 text-sm">
-                {transcript.content.map((seg, i) => (
-                  <div key={i} className="flex gap-3">
-                    <a
-                      href={`https://youtube.com/watch?v=${video.youtube_id}&t=${Math.floor(seg.start)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-muted-foreground font-mono w-12 flex-shrink-0 hover:text-primary pt-0.5"
-                    >
-                      {formatTimestamp(seg.start)}
-                    </a>
-                    <p className="leading-relaxed">{seg.text}</p>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-          ) : (
-            <div className="h-[480px] rounded-md border flex items-center justify-center text-muted-foreground text-sm">
-              No transcript available.
-            </div>
-          )}
-        </div>
-
-        {/* Notes */}
-        <NoteEditor videoId={id} initialBody={noteBody} />
-      </div>
-
-      <Separator />
-
-      <DeleteVideoButton videoId={id} />
     </div>
   )
 }
