@@ -6,6 +6,7 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
     HRFlowable, PageBreak, KeepTogether, Image
 )
+from reportlab.platypus.tableofcontents import TableOfContents
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from datetime import date
 
@@ -56,6 +57,24 @@ BASE_STYLE = [
     ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
 ]
 
+# ── TOC support ───────────────────────────────────────────────────────────────
+class TOCDocTemplate(SimpleDocTemplate):
+    def afterFlowable(self, flowable):
+        if isinstance(flowable, Paragraph):
+            if flowable.style.name == 'H1':
+                self.notify('TOCEntry', (0, flowable.getPlainText(), self.page))
+
+toc_entry_style = ParagraphStyle(
+    'TOCEntry', fontName='Helvetica', fontSize=10, textColor=DARK_BG,
+    spaceBefore=5, spaceAfter=1, leftIndent=0, leading=14
+)
+
+def build_toc():
+    toc = TableOfContents()
+    toc.levelStyles = [toc_entry_style]
+    toc.dotsMinLevel = 0
+    return toc
+
 def hdr(t): return Paragraph(t, tbl_head)
 def cell(t): return Paragraph(t, tbl_cell)
 def lbl(t):  return Paragraph(t, tbl_lbl)
@@ -66,7 +85,7 @@ def rule():  return HRFlowable(width="100%", thickness=1, color=MID_GREY, spaceA
 def chk(done=False):
     return Paragraph("&#9745;" if done else "&#9744;", S("ck", fontSize=10, textColor=DARK_BG, fontName="Helvetica", alignment=TA_CENTER))
 
-doc = SimpleDocTemplate(
+doc = TOCDocTemplate(
     OUTPUT, pagesize=A4,
     leftMargin=18*mm, rightMargin=18*mm,
     topMargin=15*mm,  bottomMargin=15*mm,
@@ -113,6 +132,12 @@ cover2.setStyle(TableStyle([
 ]))
 story.append(cover2)
 story.append(Spacer(1, 10))
+
+# ── Table of Contents ─────────────────────────────────────────────────────────
+story.append(Paragraph("Contents", h1))
+story.append(rule())
+story.append(build_toc())
+story.append(PageBreak())
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  1. EXECUTIVE SUMMARY
@@ -626,5 +651,5 @@ story.append(Paragraph(
     "YT Transcriber — Confidential Business Plan — Not for Distribution",
     S("Ftr", fontSize=7.5, textColor=MID_GREY, fontName="Helvetica", alignment=TA_CENTER)))
 
-doc.build(story)
+doc.multiBuild(story)
 print(f"PDF saved to {OUTPUT}")
