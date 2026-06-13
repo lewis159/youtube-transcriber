@@ -219,7 +219,7 @@ export default function SystemHealthPage() {
       <div className="bg-[#0F2A3E] border border-[#1A5A7F] rounded-lg p-4">
         <p className="text-sm text-[#85B7EB]">
           <strong>Auto-refresh:</strong> This page refreshes every 10 seconds to show the latest container status.
-          Reboots are logged and tracked. High reboot rates (>5 in 1 hour) trigger warnings.
+          Reboots are logged and tracked. High reboot rates (&gt;5 in 1 hour) trigger warnings.
         </p>
       </div>
     </div>
