@@ -1,0 +1,29 @@
+version: '3.9'
+
+services:
+  # nginx reverse proxy 1 — public entry point on port 4000
+  nginx-ha-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+    networks:
+      - youtube-transcriber-network
+
+  # nginx reverse proxy 2 — public entry point on port 4001
+  nginx-ha-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    ports:
+      - "4001:4000"
+    restart: unless-stopped
+    networks:
+      - youtube-transcriber-network
+
+networks:
+  youtube-transcriber-network:
+    driver: bridge
+    external: true

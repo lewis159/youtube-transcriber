@@ -2,16 +2,16 @@ FROM node:24-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm install --prefer-offline --no-audit
+COPY app-ha/package.json ./
+RUN npm install --legacy-peer-deps
 
 # Build — NEXT_PUBLIC_ vars must be present at build time (baked into JS bundle)
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY app-ha/ .
 
 ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 ARG NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
@@ -33,7 +33,7 @@ ENV NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=$NEXT_PUBLIC_CLERK_SIGN_UP_F
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-RUN npm run build -- --webpack
+RUN npm run build
 
 # Production image — minimal runtime
 FROM base AS runner
@@ -53,7 +53,7 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 # Health check: GET /api/health with 30s interval, 3 retries, 10s timeout
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=5s \
-  CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => { if (r.statusCode !== 200) throw new Error(r.statusCode); })" || exit 1
+HEALTHCHECK --interval=10s --timeout=10s --retries=3 --start-period=15s \
+  CMD node -e "require('http').get('http://localhost:3000/api/ping', (r) => { if (r.statusCode !== 200) throw new Error(r.statusCode); })" || exit 1
 
 CMD ["node", "server.js"]
