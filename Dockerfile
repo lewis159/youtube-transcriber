@@ -4,7 +4,7 @@ FROM node:24-alpine AS base
 FROM base AS deps
 RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
-COPY app-ha/package.json ./
+COPY app-ha/package.json app-ha/package-lock.json* ./
 RUN npm install --legacy-peer-deps
 
 # Build — NEXT_PUBLIC_ vars must be present at build time (baked into JS bundle)
