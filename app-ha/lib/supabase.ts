@@ -2,8 +2,22 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder'
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder'
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+// Service-role client for server-side admin operations (bypasses RLS)
+export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
+
+export async function getSupabaseUserId(clerkUserId: string): Promise<string> {
+  const { data, error } = await supabaseAdmin
+    .from('users')
+    .select('id')
+    .eq('clerk_user_id', clerkUserId)
+    .single()
+  if (error || !data) throw new Error(`User not found for Clerk ID: ${clerkUserId}`)
+  return data.id
+}
 
 // Video operations
 export async function createVideo(youtubeId: string, userId: string, title?: string, thumbnail?: string) {
