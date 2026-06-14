@@ -3,11 +3,6 @@ version: '3.9'
 services:
   # Redis Master
   redis-master:
-    labels:
-      - "project=YT_Transcription"
-      - "project.component=redis"
-      - "project.role=master"
-      - "project.env=dev"
     image: redis:7-alpine
     ports:
       - "6379:6379"
@@ -26,12 +21,6 @@ services:
 
   # Redis Slave 1
   redis-slave-1:
-    labels:
-      - "project=YT_Transcription"
-      - "project.component=redis"
-      - "project.role=slave"
-      - "project.instance=1"
-      - "project.env=dev"
     image: redis:7-alpine
     ports:
       - "6380:6379"
@@ -52,12 +41,6 @@ services:
 
   # Redis Slave 2
   redis-slave-2:
-    labels:
-      - "project=YT_Transcription"
-      - "project.component=redis"
-      - "project.role=slave"
-      - "project.instance=2"
-      - "project.env=dev"
     image: redis:7-alpine
     ports:
       - "6381:6379"
@@ -78,11 +61,6 @@ services:
 
   # Sentinel 1
   sentinel-1:
-    labels:
-      - "project=YT_Transcription"
-      - "project.component=sentinel"
-      - "project.instance=1"
-      - "project.env=dev"
     image: redis:7-alpine
     ports:
       - "26379:26379"
@@ -106,11 +84,6 @@ services:
 
   # Sentinel 2
   sentinel-2:
-    labels:
-      - "project=YT_Transcription"
-      - "project.component=sentinel"
-      - "project.instance=2"
-      - "project.env=dev"
     image: redis:7-alpine
     ports:
       - "26380:26379"
@@ -134,11 +107,6 @@ services:
 
   # Sentinel 3
   sentinel-3:
-    labels:
-      - "project=YT_Transcription"
-      - "project.component=sentinel"
-      - "project.instance=3"
-      - "project.env=dev"
     image: redis:7-alpine
     ports:
       - "26381:26379"
