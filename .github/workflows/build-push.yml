@@ -1,8 +1,9 @@
 name: Build & Push to ghcr.io
 
 on:
+  workflow_dispatch:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - 'app-ha/**'
       - '.github/workflows/build-push.yml'
