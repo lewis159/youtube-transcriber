@@ -28,13 +28,13 @@ export async function POST(req: Request) {
       'svix-timestamp': svixTimestamp,
       'svix-signature': svixSignature,
     })
-  } catch (err) {
+  } catch {
     return new Response('Invalid signature', { status: 400 })
   }
 
   const eventType = evt.type
 
-  if (eventType === 'user.created' || eventType === 'user.updated') {
+  if (eventType === 'user.created') {
     const { id, email_addresses, first_name, last_name } = evt.data
     const primaryEmail = email_addresses[0]?.email_address
 
@@ -42,15 +42,41 @@ export async function POST(req: Request) {
       return new Response('No primary email', { status: 400 })
     }
 
-    const { error } = await supabase.from('users').upsert(
-      {
-        clerk_user_id: id,
+    // New users start as explorer tier, on trial, not global admin
+    const { error } = await supabase.from('users').insert({
+      clerk_user_id: id,
+      email: primaryEmail,
+      full_name: `${first_name || ''} ${last_name || ''}`.trim() || null,
+      tier: 'explorer',
+      role: 'user',
+      is_trial: true,
+      trial_started_at: new Date().toISOString(),
+      subscription_credits: 3,
+      purchased_credits: 0,
+    })
+
+    if (error && error.code !== '23505') {
+      // 23505 = unique violation (user already exists) — safe to ignore
+      return new Response(`Supabase error: ${error.message}`, { status: 500 })
+    }
+  }
+
+  if (eventType === 'user.updated') {
+    const { id, email_addresses, first_name, last_name } = evt.data
+    const primaryEmail = email_addresses[0]?.email_address
+
+    if (!primaryEmail) {
+      return new Response('No primary email', { status: 400 })
+    }
+
+    // Only update contact info — never overwrite tier, role, credits, or trial status from Clerk
+    const { error } = await supabase
+      .from('users')
+      .update({
         email: primaryEmail,
-        full_name: `${first_name || ''} ${last_name || ''}`.trim(),
-        tier: 'free',
-      },
-      { onConflict: 'clerk_user_id' }
-    )
+        full_name: `${first_name || ''} ${last_name || ''}`.trim() || null,
+      })
+      .eq('clerk_user_id', id)
 
     if (error) {
       return new Response(`Supabase error: ${error.message}`, { status: 500 })

@@ -10,7 +10,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { youtubeUrl, title } = await request.json()
+    const body = await request.json()
+    const youtubeUrl = body.youtubeUrl || body.url
+    const { title } = body
 
     if (!youtubeUrl) {
       return NextResponse.json({ error: 'YouTube URL is required' }, { status: 400 })

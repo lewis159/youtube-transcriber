@@ -1,0 +1,78 @@
+version: '3.9'
+
+# Production Swarm stack for yt.bentech.dev
+# Deploy via Portainer → Stacks → Add Stack (Swarm mode)
+# Image built by GitHub Actions and pushed to ghcr.io on every push to main
+
+services:
+
+  app:
+    image: ghcr.io/lewis159/youtube-transcriber:latest
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      - CLERK_WEBHOOK_SECRET=${CLERK_WEBHOOK_SECRET}
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_PRICE_PRO=${STRIPE_PRICE_PRO}
+      - STRIPE_PRICE_STUDIO=${STRIPE_PRICE_STUDIO}
+      - STRIPE_PRICE_ENTERPRISE=${STRIPE_PRICE_ENTERPRISE}
+      - NEXT_PUBLIC_APP_URL=https://yt.bentech.dev
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    deploy:
+      replicas: 2
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=app"
+        - "project.env=prod"
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/ping || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - yt-prod
+      - proxy
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis-data:/data
+    deploy:
+      replicas: 1
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=redis"
+        - "project.env=prod"
+      restart_policy:
+        condition: on-failure
+    networks:
+      - yt-prod
+
+volumes:
+  redis-data:
+
+networks:
+  yt-prod:
+    driver: overlay
+
+  proxy:
+    external: true

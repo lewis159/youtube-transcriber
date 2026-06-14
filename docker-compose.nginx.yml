@@ -3,6 +3,11 @@ version: '3.9'
 services:
   # nginx reverse proxy 1 — public entry point on port 4000
   nginx-ha-1:
+    labels:
+      - "project=YT_Transcription"
+      - "project.component=nginx"
+      - "project.instance=1"
+      - "project.env=dev"
     build:
       context: .
       dockerfile: Dockerfile.nginx
@@ -14,6 +19,11 @@ services:
 
   # nginx reverse proxy 2 — public entry point on port 4001
   nginx-ha-2:
+    labels:
+      - "project=YT_Transcription"
+      - "project.component=nginx"
+      - "project.instance=2"
+      - "project.env=dev"
     build:
       context: .
       dockerfile: Dockerfile.nginx

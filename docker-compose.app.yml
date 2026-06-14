@@ -3,6 +3,11 @@ version: '3.9'
 services:
   # App instance 1 on internal port 3000, exposed as 4002
   app-4001:
+    labels:
+      - "project=YT_Transcription"
+      - "project.component=app"
+      - "project.instance=1"
+      - "project.env=dev"
     build:
       context: .
       args:
@@ -32,11 +37,14 @@ services:
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - REDIS_URL=sentinel://sentinel-1:26379,sentinel-2:26380,sentinel-3:26381/0?sentinelName=mymaster
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/ping || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/ping || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 3
       start_period: 15s
+    user: root
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
     stop_grace_period: 30s
     networks:
@@ -44,6 +52,11 @@ services:
 
   # App instance 2 on internal port 3000, exposed as 4003
   app-4002:
+    labels:
+      - "project=YT_Transcription"
+      - "project.component=app"
+      - "project.instance=2"
+      - "project.env=dev"
     build:
       context: .
       args:
@@ -73,11 +86,14 @@ services:
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - REDIS_URL=sentinel://sentinel-1:26379,sentinel-2:26380,sentinel-3:26381/0?sentinelName=mymaster
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/ping || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/ping || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 3
       start_period: 15s
+    user: root
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
     stop_grace_period: 30s
     networks:
