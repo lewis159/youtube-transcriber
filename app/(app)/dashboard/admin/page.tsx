@@ -28,8 +28,13 @@ export default function AdminDashboard() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
   const [search, setSearch] = useState('')
-  const [activeTab, setActiveTab] = useState<'users' | 'orgs'>('users')
+  const [activeTab, setActiveTab] = useState<'users' | 'orgs' | 'create'>('users')
+  const [createEmail, setCreateEmail] = useState('')
+  const [createOrgName, setCreateOrgName] = useState('')
+  const [createOrgSlug, setCreateOrgSlug] = useState('')
 
   useEffect(() => {
     fetchData()
@@ -99,6 +104,16 @@ export default function AdminDashboard() {
           }`}
         >
           Organizations ({organizations.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('create')}
+          className={`px-4 py-2 font-medium transition-colors border-b-2 ${
+            activeTab === 'create'
+              ? 'border-[#378ADD] text-white'
+              : 'border-transparent text-[#888] hover:text-white'
+          }`}
+        >
+          Create
         </button>
       </div>
 
@@ -196,6 +211,116 @@ export default function AdminDashboard() {
           ))}
         </div>
       )}
+
+      {/* Create Tab */}
+      {activeTab === 'create' && (
+        <div className="grid lg:grid-cols-2 gap-8">
+          {/* Create User Section */}
+          <div className="bg-[#18181F] border border-[#2A2A35] rounded-lg p-6">
+            <h2 className="text-lg font-bold text-white mb-4">Create User</h2>
+            <p className="text-sm text-[#888] mb-4">Create a new user account. Note: User must sign up via Clerk when webhook is configured.</p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">Email</label>
+                <input
+                  type="email"
+                  value={createEmail}
+                  onChange={e => setCreateEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  className="w-full px-4 py-2 bg-[#0F0F13] border border-[#2A2A35] rounded-lg text-white placeholder-[#666]"
+                />
+              </div>
+              <button
+                onClick={async () => {
+                  if (!createEmail) return
+                  try {
+                    setSubmitting(true)
+                    setError(null)
+                    setSuccess(null)
+                    const response = await fetch('/api/admin/users/create', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ email: createEmail }),
+                    })
+                    if (!response.ok) throw new Error('Failed to create user')
+                    setSuccess('User created successfully. Note: Webhook will be configured in production.')
+                    setCreateEmail('')
+                    await fetchData()
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : 'Failed to create user')
+                  } finally {
+                    setSubmitting(false)
+                  }
+                }}
+                disabled={submitting || !createEmail}
+                className="w-full px-4 py-2 bg-[#378ADD] hover:bg-[#185FA5] disabled:bg-[#2A2A35] text-white font-medium rounded-lg transition-colors"
+              >
+                {submitting ? 'Creating...' : 'Create User'}
+              </button>
+            </div>
+          </div>
+
+          {/* Create Organization Section */}
+          <div className="bg-[#18181F] border border-[#2A2A35] rounded-lg p-6">
+            <h2 className="text-lg font-bold text-white mb-4">Create Organization</h2>
+            <p className="text-sm text-[#888] mb-4">Create a new organization. Slug must be unique and lowercase.</p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">Organization Name</label>
+                <input
+                  type="text"
+                  value={createOrgName}
+                  onChange={e => setCreateOrgName(e.target.value)}
+                  placeholder="Acme Corp"
+                  className="w-full px-4 py-2 bg-[#0F0F13] border border-[#2A2A35] rounded-lg text-white placeholder-[#666]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">Slug (@handle)</label>
+                <input
+                  type="text"
+                  value={createOrgSlug}
+                  onChange={e => setCreateOrgSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
+                  placeholder="acme-corp"
+                  className="w-full px-4 py-2 bg-[#0F0F13] border border-[#2A2A35] rounded-lg text-white placeholder-[#666]"
+                />
+              </div>
+              <button
+                onClick={async () => {
+                  if (!createOrgName || !createOrgSlug) return
+                  try {
+                    setSubmitting(true)
+                    setError(null)
+                    setSuccess(null)
+                    const response = await fetch('/api/organizations', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ name: createOrgName, slug: createOrgSlug }),
+                    })
+                    if (!response.ok) throw new Error('Failed to create organization')
+                    setSuccess('Organization created successfully')
+                    setCreateOrgName('')
+                    setCreateOrgSlug('')
+                    await fetchData()
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : 'Failed to create organization')
+                  } finally {
+                    setSubmitting(false)
+                  }
+                }}
+                disabled={submitting || !createOrgName || !createOrgSlug}
+                className="w-full px-4 py-2 bg-[#378ADD] hover:bg-[#185FA5] disabled:bg-[#2A2A35] text-white font-medium rounded-lg transition-colors"
+              >
+                {submitting ? 'Creating...' : 'Create Organization'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error/Success Messages */}
+      {error && <div className="fixed bottom-4 right-4 bg-[#2A0F0F] border border-[#5A1515] rounded-lg p-4 text-[#E04B4A] max-w-sm"><p className="text-sm">{error}</p></div>}
+      {success && <div className="fixed bottom-4 right-4 bg-[#0F2A15] border border-[#155A2A] rounded-lg p-4 text-[#4AE070] max-w-sm"><p className="text-sm">{success}</p></div>}
     </div>
   )
 }

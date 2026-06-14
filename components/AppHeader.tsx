@@ -1,7 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { UserMenu } from './UserMenu'
+import { UserButton } from '@clerk/nextjs'
+import { useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 
 interface AppHeaderProps {
   tier?: string
@@ -9,6 +11,8 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({ tier, isAdmin }: AppHeaderProps) {
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false)
+
   return (
     <header className="sticky top-0 z-40 border-b border-[#2A2A35] bg-[#0F0F13]/95 backdrop-blur-sm">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
@@ -23,9 +27,40 @@ export function AppHeader({ tier, isAdmin }: AppHeaderProps) {
             Dashboard
           </Link>
           {isAdmin && (
-            <Link href="/dashboard/admin" className="text-sm text-[#888] hover:text-white transition-colors">
-              Admin
-            </Link>
+            <div className="relative">
+              <button
+                onClick={() => setAdminMenuOpen(!adminMenuOpen)}
+                className="flex items-center gap-2 text-sm text-[#888] hover:text-white transition-colors"
+              >
+                Admin
+                <ChevronDown className={`w-4 h-4 transition-transform ${adminMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {adminMenuOpen && (
+                <div className="absolute top-full left-0 mt-1 w-48 bg-[#18181F] border border-[#2A2A35] rounded-lg shadow-lg z-50">
+                  <Link
+                    href="/dashboard/admin"
+                    className="block px-4 py-2 text-sm text-[#888] hover:text-white hover:bg-[#242429] first:rounded-t-lg transition-colors"
+                    onClick={() => setAdminMenuOpen(false)}
+                  >
+                    Users
+                  </Link>
+                  <Link
+                    href="/dashboard/admin?tab=orgs"
+                    className="block px-4 py-2 text-sm text-[#888] hover:text-white hover:bg-[#242429] transition-colors"
+                    onClick={() => setAdminMenuOpen(false)}
+                  >
+                    Organizations
+                  </Link>
+                  <Link
+                    href="/dashboard/admin/system"
+                    className="block px-4 py-2 text-sm text-[#888] hover:text-white hover:bg-[#242429] last:rounded-b-lg transition-colors"
+                    onClick={() => setAdminMenuOpen(false)}
+                  >
+                    System
+                  </Link>
+                </div>
+              )}
+            </div>
           )}
         </nav>
 
@@ -36,7 +71,7 @@ export function AppHeader({ tier, isAdmin }: AppHeaderProps) {
               {tier}
             </span>
           )}
-          <UserMenu isAdmin={isAdmin ?? false} />
+          <UserButton />
         </div>
       </div>
     </header>

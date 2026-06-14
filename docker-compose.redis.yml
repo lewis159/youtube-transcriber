@@ -1,0 +1,174 @@
+version: '3.9'
+
+services:
+  # Redis Master
+  redis-master:
+    labels:
+      - "project=YT_Transcription"
+      - "project.component=redis"
+      - "project.role=master"
+      - "project.env=dev"
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --appendfilename "appendonly.aof"
+    volumes:
+      - redis-master-data:/data
+    restart: unless-stopped
+    networks:
+      - youtube-transcriber-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Redis Slave 1
+  redis-slave-1:
+    labels:
+      - "project=YT_Transcription"
+      - "project.component=redis"
+      - "project.role=slave"
+      - "project.instance=1"
+      - "project.env=dev"
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    command: redis-server --slaveof redis-master 6379 --appendonly yes --appendfilename "appendonly-slave-1.aof"
+    volumes:
+      - redis-slave-1-data:/data
+    depends_on:
+      - redis-master
+    restart: unless-stopped
+    networks:
+      - youtube-transcriber-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Redis Slave 2
+  redis-slave-2:
+    labels:
+      - "project=YT_Transcription"
+      - "project.component=redis"
+      - "project.role=slave"
+      - "project.instance=2"
+      - "project.env=dev"
+    image: redis:7-alpine
+    ports:
+      - "6381:6379"
+    command: redis-server --slaveof redis-master 6379 --appendonly yes --appendfilename "appendonly-slave-2.aof"
+    volumes:
+      - redis-slave-2-data:/data
+    depends_on:
+      - redis-master
+    restart: unless-stopped
+    networks:
+      - youtube-transcriber-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Sentinel 1
+  sentinel-1:
+    labels:
+      - "project=YT_Transcription"
+      - "project.component=sentinel"
+      - "project.instance=1"
+      - "project.env=dev"
+    image: redis:7-alpine
+    ports:
+      - "26379:26379"
+    command: redis-sentinel /etc/sentinel/sentinel-1.conf
+    volumes:
+      - ./sentinel-1.conf:/etc/sentinel/sentinel-1.conf
+      - sentinel-1-data:/data
+    depends_on:
+      - redis-master
+      - redis-slave-1
+      - redis-slave-2
+    restart: unless-stopped
+    networks:
+      - youtube-transcriber-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Sentinel 2
+  sentinel-2:
+    labels:
+      - "project=YT_Transcription"
+      - "project.component=sentinel"
+      - "project.instance=2"
+      - "project.env=dev"
+    image: redis:7-alpine
+    ports:
+      - "26380:26379"
+    command: redis-sentinel /etc/sentinel/sentinel-1.conf --port 26379
+    volumes:
+      - ./sentinel-1.conf:/etc/sentinel/sentinel-1.conf
+      - sentinel-2-data:/data
+    depends_on:
+      - redis-master
+      - redis-slave-1
+      - redis-slave-2
+    restart: unless-stopped
+    networks:
+      - youtube-transcriber-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Sentinel 3
+  sentinel-3:
+    labels:
+      - "project=YT_Transcription"
+      - "project.component=sentinel"
+      - "project.instance=3"
+      - "project.env=dev"
+    image: redis:7-alpine
+    ports:
+      - "26381:26379"
+    command: redis-sentinel /etc/sentinel/sentinel-1.conf --port 26379
+    volumes:
+      - ./sentinel-1.conf:/etc/sentinel/sentinel-1.conf
+      - sentinel-3-data:/data
+    depends_on:
+      - redis-master
+      - redis-slave-1
+      - redis-slave-2
+    restart: unless-stopped
+    networks:
+      - youtube-transcriber-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  redis-master-data:
+  redis-slave-1-data:
+  redis-slave-2-data:
+  sentinel-1-data:
+  sentinel-2-data:
+  sentinel-3-data:
+
+networks:
+  youtube-transcriber-network:
+    driver: bridge
+    external: true

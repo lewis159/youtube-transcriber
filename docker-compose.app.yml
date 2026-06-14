@@ -1,61 +1,13 @@
 version: '3.9'
 
 services:
-  # nginx reverse proxy — public entry point on port 4000
-  nginx:
-    image: nginx:1.27-alpine
-    ports:
-      - "4000:4000"
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - nginx_logs:/var/log/nginx
-    depends_on:
-      - app-4001
-      - app-4002
-    restart: unless-stopped
-    networks:
-      - youtube-transcriber-network
-
-  # App instance 1 on internal port 3000, exposed as 4001
+  # App instance 1 on internal port 3000, exposed as 4002
   app-4001:
-    build:
-      context: .
-      args:
-        - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-        - NEXT_PUBLIC_CLERK_SIGN_IN_URL
-        - NEXT_PUBLIC_CLERK_SIGN_UP_URL
-        - NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL
-        - NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL
-        - NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL
-        - NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL
-        - NEXT_PUBLIC_SUPABASE_URL
-        - NEXT_PUBLIC_SUPABASE_ANON_KEY
-    ports:
-      - "4001:3000"
-    environment:
-      - NODE_ENV=production
-      - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
-      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
-      - NEXT_PUBLIC_CLERK_SIGN_IN_URL=${NEXT_PUBLIC_CLERK_SIGN_IN_URL}
-      - NEXT_PUBLIC_CLERK_SIGN_UP_URL=${NEXT_PUBLIC_CLERK_SIGN_UP_URL}
-      - NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=${NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL}
-      - NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=${NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL}
-      - NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=${NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL}
-      - NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=${NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL}
-      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      redis:
-        condition: service_started
-    restart: unless-stopped
-    stop_grace_period: 30s
-    networks:
-      - youtube-transcriber-network
-
-  # App instance 2 on internal port 3000, exposed as 4002
-  app-4002:
+    labels:
+      - "project=YT_Transcription"
+      - "project.component=app"
+      - "project.instance=1"
+      - "project.env=dev"
     build:
       context: .
       args:
@@ -83,27 +35,71 @@ services:
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      redis:
-        condition: service_started
+      - REDIS_URL=sentinel://sentinel-1:26379,sentinel-2:26380,sentinel-3:26381/0?sentinelName=mymaster
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/ping || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    user: root
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
     stop_grace_period: 30s
     networks:
       - youtube-transcriber-network
 
-  redis:
-    image: redis:7-alpine
+  # App instance 2 on internal port 3000, exposed as 4003
+  app-4002:
+    labels:
+      - "project=YT_Transcription"
+      - "project.component=app"
+      - "project.instance=2"
+      - "project.env=dev"
+    build:
+      context: .
+      args:
+        - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+        - NEXT_PUBLIC_CLERK_SIGN_IN_URL
+        - NEXT_PUBLIC_CLERK_SIGN_UP_URL
+        - NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL
+        - NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL
+        - NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL
+        - NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL
+        - NEXT_PUBLIC_SUPABASE_URL
+        - NEXT_PUBLIC_SUPABASE_ANON_KEY
+    ports:
+      - "4003:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      - NEXT_PUBLIC_CLERK_SIGN_IN_URL=${NEXT_PUBLIC_CLERK_SIGN_IN_URL}
+      - NEXT_PUBLIC_CLERK_SIGN_UP_URL=${NEXT_PUBLIC_CLERK_SIGN_UP_URL}
+      - NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=${NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL}
+      - NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=${NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL}
+      - NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=${NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL}
+      - NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=${NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL}
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - REDIS_URL=sentinel://sentinel-1:26379,sentinel-2:26380,sentinel-3:26381/0?sentinelName=mymaster
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/ping || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    user: root
     volumes:
-      - redis_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
+    stop_grace_period: 30s
     networks:
       - youtube-transcriber-network
-
-volumes:
-  redis_data:
-  nginx_logs:
 
 networks:
   youtube-transcriber-network:
     driver: bridge
+    external: true
