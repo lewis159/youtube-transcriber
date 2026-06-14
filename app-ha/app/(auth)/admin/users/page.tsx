@@ -582,7 +582,7 @@ export default function UsersAndOrgsPage() {
                       <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>{f.label}</td>
                       {TIER_NAMES.map(t => (
                         <td key={t} style={{ padding: '12px 16px', textAlign: 'center' }}>
-                          <Check val={f.tiers[t]} />
+                          <Check val={!!f.tiers[t]} />
                         </td>
                       ))}
                     </tr>
