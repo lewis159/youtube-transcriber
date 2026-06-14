@@ -19,7 +19,8 @@
     "youtube-transcript": "^1.0.6",
     "jspdf": "^2.5.1",
     "jszip": "^3.10.1",
-    "svix": "^1.15.0"
+    "svix": "^1.15.0",
+    "stripe": "^17.7.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.6",

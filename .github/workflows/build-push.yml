@@ -32,8 +32,8 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: ./app-ha
-          dockerfile: ./app-ha/Dockerfile
+          context: .
+          dockerfile: ./Dockerfile
           push: true
           tags: |
             ghcr.io/lewis159/youtube-transcriber:latest
