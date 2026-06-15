@@ -1,10 +1,6 @@
-import Link from 'next/link'
-import { auth } from '@clerk/nextjs/server'
+import { NavCTA, HeroCTA, PricingCTA, FinalCTA } from './LandingCTA'
 
-export default async function LandingPage() {
-  const { userId } = await auth()
-  const isSignedIn = !!userId
-
+export default function LandingPage() {
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh', color: 'var(--text-primary)' }}>
 
@@ -30,18 +26,7 @@ export default async function LandingPage() {
           <a href="#features" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Features</a>
           <a href="#pricing" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Pricing <span style={{ fontSize: '10px', color: 'var(--accent)' }}>Soon</span></a>
           <a href="/knowledge-base" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Knowledge Base</a>
-          {isSignedIn ? (
-            <Link href="/dashboard" className="btn-primary" style={{ padding: '8px 20px', fontSize: '14px' }}>
-              Go to Dashboard
-            </Link>
-          ) : (
-            <>
-              <Link href="/sign-in" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Sign In</Link>
-              <Link href="/sign-up" className="btn-primary" style={{ padding: '8px 20px', fontSize: '14px' }}>
-                Start Free
-              </Link>
-            </>
-          )}
+          <NavCTA />
         </nav>
       </header>
 
@@ -92,20 +77,7 @@ export default async function LandingPage() {
             Export, organize, and share — built for creators who demand more.
           </p>
 
-          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            {isSignedIn ? (
-              <Link href="/dashboard" className="btn-primary" style={{ fontSize: '16px', padding: '14px 36px' }}>
-                Go to Dashboard
-              </Link>
-            ) : (
-              <Link href="/sign-up" className="btn-primary" style={{ fontSize: '16px', padding: '14px 36px' }}>
-                Start Free — No card needed
-              </Link>
-            )}
-            <a href="#features" className="btn-secondary" style={{ fontSize: '16px', padding: '14px 36px' }}>
-              See Features
-            </a>
-          </div>
+          <HeroCTA />
 
           {/* Social proof */}
           <div style={{
@@ -204,9 +176,7 @@ export default async function LandingPage() {
           <p style={{ color: 'var(--text-secondary)', fontSize: '18px', lineHeight: 1.6 }}>
             We&apos;re finalising our plans. Sign up now to get early access and be the first to know when paid plans launch.
           </p>
-          <Link href={isSignedIn ? '/dashboard' : '/sign-up'} className="btn-primary" style={{ display: 'inline-block', marginTop: '32px', padding: '12px 32px', fontSize: '15px', textDecoration: 'none' }}>
-            {isSignedIn ? 'Go to Dashboard' : 'Get early access'}
-          </Link>
+          <PricingCTA />
         </div>
       </section>
 
@@ -222,9 +192,7 @@ export default async function LandingPage() {
         <p style={{ color: 'var(--text-secondary)', fontSize: '18px', marginBottom: '40px' }}>
           No credit card required. Your first 3 transcriptions are free.
         </p>
-        <Link href={isSignedIn ? '/dashboard' : '/sign-up'} className="btn-primary" style={{ fontSize: '18px', padding: '16px 48px', textDecoration: 'none' }}>
-          {isSignedIn ? 'Go to Dashboard' : 'Create your free account'}
-        </Link>
+        <FinalCTA />
       </section>
 
       {/* ── FOOTER ──────────────────────────────────── */}
