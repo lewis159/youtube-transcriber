@@ -1,0 +1,118 @@
+import Link from 'next/link'
+
+/**
+ * Shared header + footer chrome for the public marketing pages
+ * (privacy, terms, contact, faq, about). Server component — matches
+ * the landing page dark theme and CSS-variable language.
+ */
+
+const footerLinks = [
+  { label: 'Features', href: '/#features' },
+  { label: 'Pricing', href: '/#pricing' },
+  { label: 'Knowledge Base', href: '/knowledge-base' },
+  { label: 'About', href: '/about' },
+  { label: 'FAQ', href: '/faq' },
+  { label: 'Contact', href: '/contact' },
+  { label: 'Privacy', href: '/privacy' },
+  { label: 'Terms', href: '/terms' },
+]
+
+export default function PublicPageShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ background: 'var(--bg-base)', minHeight: '100vh', color: 'var(--text-primary)' }}>
+      {/* ── NAV ─────────────────────────────────────── */}
+      <header style={{
+        position: 'sticky', top: 0, zIndex: 100,
+        background: 'var(--nav-bg)', borderBottom: '1px solid var(--nav-border)',
+        backdropFilter: 'blur(10px)', padding: '0 40px', height: '64px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <Link href="/" style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.5px', textDecoration: 'none' }}>
+          <span style={{ color: 'var(--accent)' }}>YT</span>
+          <span style={{ color: 'var(--text-primary)' }}> Transcriber</span>
+        </Link>
+        <nav style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+          <Link href="/knowledge-base" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Knowledge Base</Link>
+          <Link href="/faq" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>FAQ</Link>
+          <Link href="/contact" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Contact</Link>
+        </nav>
+      </header>
+
+      <main>{children}</main>
+
+      {/* ── FOOTER ──────────────────────────────────── */}
+      <footer style={{
+        background: 'var(--bg-surface)',
+        borderTop: '1px solid var(--accent-border)',
+        padding: '48px 40px',
+      }}>
+        <div style={{
+          maxWidth: '1200px', margin: '0 auto',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          flexWrap: 'wrap', gap: '24px',
+        }}>
+          <Link href="/" style={{ fontSize: '18px', fontWeight: 800, textDecoration: 'none', color: 'var(--text-primary)' }}>
+            <span style={{ color: 'var(--accent)' }}>YT</span> Transcriber
+          </Link>
+          <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+            {footerLinks.map(({ label, href }) => (
+              <Link key={label} href={href} style={{ fontSize: '14px', color: 'var(--text-muted)', textDecoration: 'none' }}>{label}</Link>
+            ))}
+          </div>
+          <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+            &copy; 2026 YT Transcriber. Built for creators.
+          </div>
+        </div>
+      </footer>
+    </div>
+  )
+}
+
+/** Shared content-page heading + wrapper helpers. */
+export function PageWrap({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ maxWidth: '820px', margin: '0 auto', padding: '64px 40px 96px' }}>
+      {children}
+    </div>
+  )
+}
+
+export function PageTitle({ kicker, title, subtitle }: { kicker?: string; title: string; subtitle?: string }) {
+  return (
+    <div style={{ marginBottom: '40px' }}>
+      {kicker && (
+        <div style={{ fontSize: '13px', color: 'var(--accent)', fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '12px' }}>
+          {kicker}
+        </div>
+      )}
+      <h1 style={{ fontSize: '44px', fontWeight: 900, lineHeight: 1.1, marginBottom: subtitle ? '16px' : 0 }}>{title}</h1>
+      {subtitle && <p style={{ fontSize: '18px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{subtitle}</p>}
+    </div>
+  )
+}
+
+export function DraftBanner() {
+  return (
+    <div style={{
+      background: 'var(--accent-subtle)',
+      border: '1px solid var(--accent-border)',
+      borderRadius: '10px',
+      padding: '14px 18px',
+      marginBottom: '40px',
+      fontSize: '14px',
+      color: 'var(--accent)',
+      fontWeight: 600,
+    }}>
+      Draft — pending legal review. This document is provided for transparency and does not yet constitute final, legally reviewed terms.
+    </div>
+  )
+}
+
+export function Section({ heading, children }: { heading: string; children: React.ReactNode }) {
+  return (
+    <section style={{ marginBottom: '36px' }}>
+      <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '12px', color: 'var(--text-primary)' }}>{heading}</h2>
+      <div style={{ fontSize: '15px', color: 'var(--text-secondary)', lineHeight: 1.75 }}>{children}</div>
+    </section>
+  )
+}

@@ -198,8 +198,11 @@ export default function LandingPage() {
               { label: 'Features', href: '#features' },
               { label: 'Pricing', href: '#pricing' },
               { label: 'Knowledge Base', href: '/knowledge-base' },
-              { label: 'Privacy', href: '#' },
-              { label: 'Terms', href: '#' },
+              { label: 'About', href: '/about' },
+              { label: 'FAQ', href: '/faq' },
+              { label: 'Contact', href: '/contact' },
+              { label: 'Privacy', href: '/privacy' },
+              { label: 'Terms', href: '/terms' },
             ].map(({ label, href }) => (
               <a key={label} href={href} style={{ fontSize: '14px', color: 'var(--text-muted)', textDecoration: 'none' }}>{label}</a>
             ))}
