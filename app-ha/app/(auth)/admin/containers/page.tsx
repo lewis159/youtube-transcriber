@@ -10,11 +10,22 @@ interface DockerContainer {
   State: string
   Ports: { IP?: string; PrivatePort: number; PublicPort?: number; Type: string }[]
   Created: number
+  Labels?: Record<string, string>
 }
 
 interface GroupedContainers {
   [group: string]: DockerContainer[]
 }
+
+type ActionType = 'start' | 'stop' | 'pause' | 'unpause' | 'restart' | 'kill'
+
+interface PendingAction {
+  containerId: string
+  containerName: string
+  action: ActionType
+}
+
+const PROJECT_LABEL = 'yt-transcriber'
 
 const GROUP_PREFIXES: Record<string, string> = {
   nginx:    'Nginx',
@@ -23,19 +34,35 @@ const GROUP_PREFIXES: Record<string, string> = {
   sentinel: 'Sentinel',
 }
 
+const ACTION_META: Record<ActionType, { label: string; icon: string; danger: boolean }> = {
+  start:   { label: 'Start',   icon: '▶',  danger: false },
+  stop:    { label: 'Stop',    icon: '⏹',  danger: true  },
+  pause:   { label: 'Pause',   icon: '⏸',  danger: false },
+  unpause: { label: 'Unpause', icon: '▶▶', danger: false },
+  restart: { label: 'Restart', icon: '↺',  danger: false },
+  kill:    { label: 'Kill',    icon: '✕',   danger: true  },
+}
+
+function isProjectContainer(c: DockerContainer): boolean {
+  const nameMatch = (c.Names?.[0] ?? '').toLowerCase().includes(PROJECT_LABEL)
+  const labelMatch = Object.values(c.Labels ?? {}).some(v =>
+    v.toLowerCase().includes(PROJECT_LABEL)
+  ) || (c.Labels?.['com.docker.compose.project'] ?? '').toLowerCase().includes(PROJECT_LABEL)
+  return nameMatch || labelMatch
+}
+
 function getGroup(name: string): string {
   const lower = name.toLowerCase().replace(/^\//, '')
   for (const [prefix, label] of Object.entries(GROUP_PREFIXES)) {
-    if (lower.startsWith(prefix)) return label
+    if (lower.includes(prefix)) return label
   }
   return 'Other'
 }
 
 function statusBadge(state: string, status: string) {
-  const isRunning  = state === 'running'
   const isUnhealthy = status.toLowerCase().includes('unhealthy')
-  const color  = isUnhealthy ? '#E53935' : isRunning ? '#22c55e' : '#eab308'
-  const label  = isUnhealthy ? 'unhealthy' : state
+  const color = isUnhealthy ? '#E53935' : state === 'running' ? '#22c55e' : state === 'paused' ? '#eab308' : '#888'
+  const label = isUnhealthy ? 'unhealthy' : state
   return (
     <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: `${color}18`, color, fontWeight: 600 }}>
       {label}
@@ -43,24 +70,28 @@ function statusBadge(state: string, status: string) {
   )
 }
 
-function formatUptime(status: string): string {
-  // Status string from Docker is e.g. "Up 3 hours" or "Exited (0) 2 days ago"
-  return status
+function formatPorts(ports: DockerContainer['Ports']): string {
+  if (!ports?.length) return '—'
+  return ports.filter(p => p.PublicPort).map(p => `${p.PublicPort}→${p.PrivatePort}`).join(', ') || '—'
 }
 
-function formatPorts(ports: DockerContainer['Ports']): string {
-  if (!ports || ports.length === 0) return '—'
-  return ports
-    .filter((p) => p.PublicPort)
-    .map((p) => `${p.PublicPort}→${p.PrivatePort}`)
-    .join(', ') || '—'
+function availableActions(state: string): ActionType[] {
+  if (state === 'running') return ['pause', 'stop', 'restart', 'kill']
+  if (state === 'paused')  return ['unpause', 'stop', 'kill']
+  return ['start']
 }
 
 export default function ContainersPage() {
-  const [groups, setGroups]         = useState<GroupedContainers>({})
-  const [error, setError]           = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<string>('')
-  const [loading, setLoading]       = useState(true)
+  const [allContainers, setAllContainers] = useState<DockerContainer[]>([])
+  const [showAll, setShowAll]             = useState(false)
+  const [error, setError]                 = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated]     = useState('')
+  const [loading, setLoading]             = useState(true)
+  const [pending, setPending]             = useState<PendingAction | null>(null)
+  const [phrase, setPhrase]               = useState('')
+  const [phraseError, setPhraseError]     = useState('')
+  const [acting, setActing]               = useState(false)
+  const [toast, setToast]                 = useState<string | null>(null)
 
   const fetchContainers = useCallback(async () => {
     try {
@@ -71,14 +102,7 @@ export default function ContainersPage() {
         return
       }
       const data = await res.json()
-      const grouped: GroupedContainers = {}
-      for (const c of (data.containers as DockerContainer[])) {
-        const name  = c.Names?.[0] ?? c.Id
-        const group = getGroup(name)
-        if (!grouped[group]) grouped[group] = []
-        grouped[group].push(c)
-      }
-      setGroups(grouped)
+      setAllContainers(data.containers ?? [])
       setError(null)
       setLastUpdated(new Date().toLocaleTimeString())
     } catch {
@@ -94,11 +118,156 @@ export default function ContainersPage() {
     return () => clearInterval(interval)
   }, [fetchContainers])
 
+  const displayed = showAll ? allContainers : allContainers.filter(isProjectContainer)
+
+  const grouped: GroupedContainers = {}
+  for (const c of displayed) {
+    const name = (c.Names?.[0] ?? c.Id).replace(/^\//, '')
+    const group = getGroup(name)
+    if (!grouped[group]) grouped[group] = []
+    grouped[group].push(c)
+  }
+
   const groupOrder = ['Nginx', 'App', 'Redis', 'Sentinel', 'Other']
-  const sortedGroups = groupOrder.filter((g) => groups[g])
+  const sortedGroups = groupOrder.filter(g => grouped[g])
+
+  function openModal(c: DockerContainer, action: ActionType) {
+    const name = (c.Names?.[0] ?? c.Id).replace(/^\//, '')
+    setPending({ containerId: c.Id, containerName: name, action })
+    setPhrase('')
+    setPhraseError('')
+  }
+
+  function closeModal() {
+    if (acting) return
+    setPending(null)
+    setPhrase('')
+    setPhraseError('')
+  }
+
+  async function confirmAction() {
+    if (!pending) return
+    const expected = `${pending.action} ${pending.containerName}`.toLowerCase().trim()
+    if (phrase.toLowerCase().trim() !== expected) {
+      setPhraseError(`Type exactly: ${pending.action} ${pending.containerName}`)
+      return
+    }
+    setActing(true)
+    try {
+      const res = await fetch(`/api/admin/containers/${pending.containerId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: pending.action, phrase, containerName: pending.containerName }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setPhraseError(data.error || 'Action failed')
+        return
+      }
+      setPending(null)
+      showToast(`${ACTION_META[pending.action].label} sent to ${pending.containerName}`)
+      setTimeout(fetchContainers, 1000)
+    } catch {
+      setPhraseError('Failed to reach server')
+    } finally {
+      setActing(false)
+    }
+  }
+
+  function showToast(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 3500)
+  }
+
+  const projectCount = allContainers.filter(isProjectContainer).length
 
   return (
-    <div style={{ background: 'var(--bg-base)', minHeight: '100vh', color: 'var(--text-primary)' }}>
+    <div style={{ background: 'var(--bg-base)', minHeight: '100vh', color: 'var(--text-primary)', position: 'relative' }}>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: '24px', right: '24px', zIndex: 200,
+          background: '#0d0d0d', border: '0.5px solid #22c55e', borderRadius: '8px',
+          padding: '12px 18px', fontSize: '13px', color: '#22c55e', fontWeight: 500,
+        }}>
+          ✓ {toast}
+        </div>
+      )}
+
+      {/* Confirmation modal */}
+      {pending && (
+        <div
+          onClick={closeModal}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#0d0d0d', border: `0.5px solid ${ACTION_META[pending.action].danger ? 'rgba(229,57,53,0.4)' : '#2a2a2a'}`,
+              borderRadius: '10px', padding: '24px', width: '420px', maxWidth: '90vw',
+            }}
+          >
+            <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '6px' }}>
+              Confirm: {ACTION_META[pending.action].label}
+            </div>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+              To confirm, type the phrase below exactly as shown:
+            </div>
+            <div style={{
+              background: '#141414', border: '0.5px solid #2a2a2a', borderRadius: '6px',
+              padding: '10px 14px', fontFamily: 'monospace', fontSize: '13px',
+              color: '#e53935', marginBottom: '16px', letterSpacing: '0.02em',
+            }}>
+              {pending.action} {pending.containerName}
+            </div>
+            <input
+              type="text"
+              autoFocus
+              value={phrase}
+              onChange={e => { setPhrase(e.target.value); setPhraseError('') }}
+              onKeyDown={e => e.key === 'Enter' && confirmAction()}
+              placeholder={`${pending.action} ${pending.containerName}`}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                background: '#141414', border: `0.5px solid ${phraseError ? 'rgba(229,57,53,0.5)' : '#2a2a2a'}`,
+                borderRadius: '6px', padding: '10px 14px',
+                color: 'var(--text-primary)', fontSize: '13px', fontFamily: 'monospace',
+                outline: 'none', marginBottom: phraseError ? '8px' : '20px',
+              }}
+            />
+            {phraseError && (
+              <div style={{ fontSize: '12px', color: '#E53935', marginBottom: '16px' }}>{phraseError}</div>
+            )}
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={closeModal}
+                disabled={acting}
+                style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '6px', background: 'transparent', border: '0.5px solid #2a2a2a', color: 'var(--text-secondary)', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmAction}
+                disabled={acting}
+                style={{
+                  fontSize: '13px', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600,
+                  background: ACTION_META[pending.action].danger ? 'rgba(229,57,53,0.12)' : 'rgba(34,197,94,0.12)',
+                  border: `0.5px solid ${ACTION_META[pending.action].danger ? 'rgba(229,57,53,0.4)' : 'rgba(34,197,94,0.4)'}`,
+                  color: ACTION_META[pending.action].danger ? '#E53935' : '#22c55e',
+                }}
+              >
+                {acting ? 'Sending…' : `Confirm ${ACTION_META[pending.action].label}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top bar */}
       <div style={{
         background: '#0d0d0d', borderBottom: '0.5px solid #1e1e1e',
@@ -111,8 +280,17 @@ export default function ContainersPage() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {lastUpdated && (
-            <span style={{ fontSize: '11px', color: '#555', fontFamily: 'monospace' }}>Last updated: {lastUpdated}</span>
+            <span style={{ fontSize: '11px', color: '#555', fontFamily: 'monospace' }}>Updated: {lastUpdated}</span>
           )}
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={showAll}
+              onChange={e => setShowAll(e.target.checked)}
+              style={{ cursor: 'pointer' }}
+            />
+            Show all containers
+          </label>
           <button
             onClick={fetchContainers}
             style={{ fontSize: '12px', padding: '5px 12px', borderRadius: '6px', background: 'transparent', border: '0.5px solid #2a2a2a', color: 'var(--text-secondary)', cursor: 'pointer' }}
@@ -123,9 +301,17 @@ export default function ContainersPage() {
       </div>
 
       <div style={{ padding: '24px' }}>
+
+        {!loading && !error && (
+          <div style={{ fontSize: '12px', color: '#555', marginBottom: '16px' }}>
+            Showing <strong style={{ color: 'var(--text-secondary)' }}>{displayed.length}</strong> container{displayed.length !== 1 ? 's' : ''}
+            {!showAll && ` (${projectCount} matched project: ${PROJECT_LABEL})`}
+          </div>
+        )}
+
         {loading && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#555', fontSize: '14px' }}>
-            Loading containers...
+            Loading containers…
           </div>
         )}
 
@@ -134,41 +320,70 @@ export default function ContainersPage() {
             <div style={{ fontSize: '24px', marginBottom: '12px' }}>🔌</div>
             <div style={{ fontSize: '14px', fontWeight: 600, color: '#E53935', marginBottom: '8px' }}>Docker socket unavailable</div>
             <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{error}</div>
-            <div style={{ fontSize: '12px', color: '#555', marginTop: '8px' }}>Ensure the container has <code style={{ fontFamily: 'monospace', color: '#888' }}>/var/run/docker.sock</code> mounted read-only.</div>
+            <div style={{ fontSize: '12px', color: '#555', marginTop: '8px' }}>
+              Ensure the container has <code style={{ fontFamily: 'monospace', color: '#888' }}>/var/run/docker.sock</code> mounted.
+            </div>
           </div>
         )}
 
         {!loading && !error && sortedGroups.length === 0 && (
           <div style={{ color: '#555', fontSize: '14px', textAlign: 'center', padding: '48px' }}>
-            No containers found.
+            No {PROJECT_LABEL} containers found.{' '}
+            <button onClick={() => setShowAll(true)} style={{ color: '#E53935', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px' }}>
+              Show all containers?
+            </button>
           </div>
         )}
 
         {!loading && !error && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {sortedGroups.map((groupName) => (
+            {sortedGroups.map(groupName => (
               <div key={groupName} style={{ background: '#0d0d0d', border: '0.5px solid #1e1e1e', borderRadius: '8px', overflow: 'hidden' }}>
                 <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #1e1e1e', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{groupName}</span>
-                  <span style={{ fontSize: '11px', color: '#555' }}>{groups[groupName].length} container{groups[groupName].length !== 1 ? 's' : ''}</span>
+                  <span style={{ fontSize: '11px', color: '#555' }}>{grouped[groupName].length} container{grouped[groupName].length !== 1 ? 's' : ''}</span>
                 </div>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ borderBottom: '0.5px solid #141414' }}>
-                      {['Name', 'Status', 'Uptime', 'Ports'].map((h) => (
-                        <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                      {['Name', 'Status', 'Uptime', 'Ports', 'Actions'].map(h => (
+                        <th key={h} style={{
+                          padding: '10px 16px', textAlign: h === 'Actions' ? 'right' : 'left',
+                          fontSize: '11px', color: '#555', fontWeight: 600,
+                          textTransform: 'uppercase', letterSpacing: '0.05em',
+                        }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {groups[groupName].map((c, i) => {
+                    {grouped[groupName].map((c, i) => {
                       const name = (c.Names?.[0] ?? c.Id).replace(/^\//, '')
+                      const actions = availableActions(c.State)
                       return (
-                        <tr key={c.Id} style={{ borderBottom: i < groups[groupName].length - 1 ? '0.5px solid #141414' : 'none' }}>
+                        <tr key={c.Id} style={{ borderBottom: i < grouped[groupName].length - 1 ? '0.5px solid #141414' : 'none' }}>
                           <td style={{ padding: '10px 16px', fontSize: '13px', fontFamily: 'monospace', color: 'var(--text-primary)' }}>{name}</td>
                           <td style={{ padding: '10px 16px' }}>{statusBadge(c.State, c.Status)}</td>
-                          <td style={{ padding: '10px 16px', fontSize: '12px', color: 'var(--text-secondary)' }}>{formatUptime(c.Status)}</td>
+                          <td style={{ padding: '10px 16px', fontSize: '12px', color: 'var(--text-secondary)' }}>{c.Status}</td>
                           <td style={{ padding: '10px 16px', fontSize: '12px', color: '#555', fontFamily: 'monospace' }}>{formatPorts(c.Ports)}</td>
+                          <td style={{ padding: '10px 16px', textAlign: 'right' }}>
+                            <div style={{ display: 'inline-flex', gap: '4px' }}>
+                              {actions.map(action => (
+                                <button
+                                  key={action}
+                                  onClick={() => openModal(c, action)}
+                                  title={ACTION_META[action].label}
+                                  style={{
+                                    padding: '4px 9px', fontSize: '12px', borderRadius: '4px', cursor: 'pointer',
+                                    background: 'transparent',
+                                    border: `0.5px solid ${ACTION_META[action].danger ? 'rgba(229,57,53,0.35)' : '#2a2a2a'}`,
+                                    color: ACTION_META[action].danger ? '#E53935' : 'var(--text-secondary)',
+                                  }}
+                                >
+                                  {ACTION_META[action].icon}
+                                </button>
+                              ))}
+                            </div>
+                          </td>
                         </tr>
                       )
                     })}

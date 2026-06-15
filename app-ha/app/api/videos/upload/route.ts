@@ -3,10 +3,12 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createVideo, updateVideoStatus, saveTranscript } from '@/lib/supabase'
-import { fetchTranscript, extractYouTubeId, getYouTubeThumbnail } from '@/lib/transcript'
+import { fetchTranscript, extractYouTubeId, getYouTubeThumbnail, getYouTubeTitle } from '@/lib/transcript'
 import { checkUserFeature, upgradeRequired } from '@/lib/feature-flags'
 
 export async function POST(request: NextRequest) {
+  let video: Awaited<ReturnType<typeof createVideo>> | undefined
+
   try {
     const { userId } = await auth()
     if (!userId) {
@@ -31,11 +33,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid YouTube URL' }, { status: 400 })
     }
 
+    // Fetch real YouTube title via oEmbed, fall back to youtubeId
+    const videoTitle = await getYouTubeTitle(youtubeId)
+
     // Create video record
-    const video = await createVideo(
+    video = await createVideo(
       youtubeId,
       userId,
-      title || youtubeId,
+      videoTitle,
       getYouTubeThumbnail(youtubeId)
     )
 
@@ -63,7 +68,12 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Upload error:', error)
 
-    const message = error instanceof Error ? error.message : 'Failed to upload video'
+    // Mark video as errored if the record was already created
+    if (video?.id) {
+      await updateVideoStatus(video.id, 'error').catch(() => {})
+    }
+
+    const message = error instanceof Error ? error.message : 'Failed to process video'
 
     return NextResponse.json(
       {

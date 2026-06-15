@@ -53,35 +53,102 @@ export default async function FeatureFlagsPage() {
           Override features per tier or per individual user. Changes take effect immediately.
         </p>
 
-        {/* Tier defaults table */}
-        <div style={{ background: '#0d0d0d', border: '0.5px solid #1e1e1e', borderRadius: '8px', overflow: 'hidden', marginBottom: '24px' }}>
-          <div style={{ padding: '16px', borderBottom: '0.5px solid #1e1e1e', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '14px' }}>🏷️</span>
-            <span style={{ fontSize: '13px', fontWeight: 600 }}>Tier Defaults</span>
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '0.5px solid #1a1a1a' }}>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', width: '220px' }}>Feature</th>
-                {tiers.map((t) => (
-                  <th key={t} style={{ padding: '12px 16px', textAlign: 'center', fontSize: '11px', color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {features.map((f, i) => (
-                <tr key={f.key} style={{ borderBottom: i < features.length - 1 ? '0.5px solid #141414' : 'none' }}>
-                  <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>{f.label}</td>
-                  {tiers.map((t) => (
-                    <td key={t} style={{ padding: '12px 16px', textAlign: 'center' }}>
-                      <Check val={f.tiers[t]} />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {/* Tier defaults — pricing card grid */}
+        {(() => {
+          const tierMeta: Record<TierName, { color: string; price: string; includes: string | null }> = {
+            Starter:    { color: '#888',    price: 'Free',    includes: null },
+            Pro:        { color: '#E53935', price: '$9/mo',   includes: 'Includes Starter +' },
+            Studio:     { color: '#ff6b6b', price: '$29/mo',  includes: 'Includes Pro +' },
+            Enterprise: { color: '#ff8a80', price: 'Custom',  includes: 'Includes Studio +' },
+          }
+          const prevTier: Record<TierName, TierName | null> = {
+            Starter: null, Pro: 'Starter', Studio: 'Pro', Enterprise: 'Studio',
+          }
+
+          return (
+            <div style={{ background: '#0d0d0d', border: '0.5px solid #1e1e1e', borderRadius: '8px', overflow: 'hidden', marginBottom: '24px' }}>
+              <div style={{ padding: '16px', borderBottom: '0.5px solid #1e1e1e', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '14px' }}>🏷️</span>
+                <span style={{ fontSize: '13px', fontWeight: 600 }}>Tier Defaults</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0', padding: '20px', gap: '12px' }}>
+                {tiers.map((tier) => {
+                  const meta = tierMeta[tier]
+                  const prev = prevTier[tier]
+                  const inherited = prev
+                    ? features.filter((f) => f.tiers[prev])
+                    : []
+                  const added = features.filter((f) => {
+                    if (!f.tiers[tier]) return false
+                    if (prev === null) return true
+                    return !f.tiers[prev]
+                  })
+
+                  return (
+                    <div key={tier} style={{
+                      background: '#141414',
+                      border: `0.5px solid ${meta.color}33`,
+                      borderRadius: '8px',
+                      overflow: 'hidden',
+                    }}>
+                      {/* Card header */}
+                      <div style={{
+                        padding: '14px 16px',
+                        borderBottom: `0.5px solid ${meta.color}33`,
+                        background: `${meta.color}0d`,
+                      }}>
+                        <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: meta.color }}>{tier}</div>
+                        <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>{meta.price}</div>
+                      </div>
+
+                      <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '0' }}>
+                        {/* Inherited features (shown collapsed for Pro/Studio/Enterprise) */}
+                        {meta.includes && inherited.length > 0 && (
+                          <>
+                            <div style={{
+                              fontSize: '10px', fontWeight: 600, textTransform: 'uppercase',
+                              letterSpacing: '0.07em', color: '#444', marginBottom: '8px',
+                              paddingBottom: '6px', borderBottom: '0.5px solid #1e1e1e',
+                            }}>
+                              {meta.includes}
+                            </div>
+                            {inherited.map((f) => (
+                              <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0' }}>
+                                <span style={{ fontSize: '13px', color: '#3a6b3a', lineHeight: 1 }}>✓</span>
+                                <span style={{ fontSize: '12px', color: '#555' }}>{f.label}</span>
+                              </div>
+                            ))}
+                            {added.length > 0 && (
+                              <div style={{
+                                fontSize: '10px', fontWeight: 600, textTransform: 'uppercase',
+                                letterSpacing: '0.07em', color: meta.color, margin: '10px 0 8px',
+                                paddingBottom: '6px', borderBottom: `0.5px solid ${meta.color}33`,
+                              }}>
+                                New in {tier}
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {/* Added / base features */}
+                        {added.map((f) => (
+                          <div key={f.key} style={{
+                            display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0',
+                            borderLeft: `2px solid ${meta.color}`,
+                            paddingLeft: '8px', marginLeft: '-8px',
+                          }}>
+                            <span style={{ fontSize: '13px', color: '#22c55e', lineHeight: 1 }}>✓</span>
+                            <span style={{ fontSize: '12px', color: 'var(--text-primary)', fontWeight: 500 }}>{f.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* User overrides */}
         <div style={{ background: '#0d0d0d', border: '0.5px solid #1e1e1e', borderRadius: '8px', padding: '16px' }}>

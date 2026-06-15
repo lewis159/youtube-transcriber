@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import KBNavCTA from './KBNavCTA'
 
 export default function KnowledgeBaseLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -15,8 +16,7 @@ export default function KnowledgeBaseLayout({ children }: { children: React.Reac
         </Link>
         <nav style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
           <Link href="/knowledge-base" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Knowledge Base</Link>
-          <Link href="/dashboard" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Dashboard</Link>
-          <Link href="/sign-in" className="btn-primary" style={{ padding: '8px 20px', fontSize: '14px' }}>Sign in</Link>
+          <KBNavCTA />
         </nav>
       </header>
       <main>{children}</main>

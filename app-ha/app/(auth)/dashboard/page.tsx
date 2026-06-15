@@ -53,7 +53,11 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ youtubeUrl: url }),
       })
-      if (!res.ok) throw new Error('Upload failed')
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setUrlError(data.error || 'Failed to add video. Please try again.')
+        return
+      }
       setUrl('')
       await loadVideos()
     } catch (e) {
@@ -61,6 +65,18 @@ export default function DashboardPage() {
       setUrlError('Failed to add video. Please try again.')
     } finally {
       setUploading(false)
+    }
+  }
+
+  async function handleDelete(videoId: string) {
+    if (!window.confirm('Delete this video?')) return
+    try {
+      const res = await fetch(`/api/videos/${videoId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Delete failed')
+      await loadVideos()
+    } catch (e) {
+      console.error(e)
+      alert('Failed to delete video. Please try again.')
     }
   }
 
@@ -89,7 +105,7 @@ export default function DashboardPage() {
     }
   }
 
-  const statusColor = (s: string) => s === 'completed' ? '#4caf50' : s === 'processing' ? 'var(--accent)' : '#666'
+  const statusColor = (s: string) => s === 'completed' ? '#4caf50' : s === 'processing' ? 'var(--accent)' : s === 'error' ? '#f44336' : '#666'
   const statusLabel = (s: string) => s === 'completed' ? 'Ready' : s === 'processing' ? 'Processing…' : s === 'pending' ? 'Queued' : 'Error'
 
   return (
@@ -218,7 +234,7 @@ export default function DashboardPage() {
                       marginBottom: '6px',
                     }}
                   >
-                    {video.title}
+                    {video.title || video.youtube_id}
                   </Link>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <span style={{
@@ -323,6 +339,23 @@ export default function DashboardPage() {
                       </div>
                     )}
                   </div>
+
+                  <button
+                    onClick={() => handleDelete(video.id)}
+                    title="Delete video"
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      background: 'transparent',
+                      border: '1px solid transparent',
+                      color: '#e57373',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      lineHeight: 1,
+                    }}
+                  >
+                    ✕
+                  </button>
                 </div>
               </div>
             ))}

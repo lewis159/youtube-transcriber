@@ -26,7 +26,14 @@ export async function fetchTranscript(youtubeUrl: string): Promise<TranscriptIte
     }))
   } catch (error) {
     console.error('Error fetching transcript:', error)
-    throw error
+    const msg = error instanceof Error ? error.message : String(error)
+    if (msg.includes('private') || msg.includes('unavailable') || msg.includes('Could not find')) {
+      throw new Error('This video is private or unavailable.')
+    }
+    if (msg.includes('transcript') || msg.includes('subtitles') || msg.includes('captions') || msg.includes('disabled')) {
+      throw new Error('This video has no captions. Only videos with subtitles can be transcribed.')
+    }
+    throw new Error('Could not fetch transcript. The video may be private or have captions disabled.')
   }
 }
 
@@ -43,6 +50,17 @@ export function extractYouTubeId(url: string): string | null {
   }
 
   return null
+}
+
+export async function getYouTubeTitle(youtubeId: string): Promise<string> {
+  try {
+    const res = await fetch(`https://www.youtube.com/oembed?url=https://youtube.com/watch?v=${youtubeId}&format=json`)
+    if (!res.ok) return youtubeId
+    const data = await res.json()
+    return data.title || youtubeId
+  } catch {
+    return youtubeId
+  }
 }
 
 export function getYouTubeThumbnail(youtubeId: string): string {
