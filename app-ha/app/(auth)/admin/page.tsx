@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase'
+import AdminQuickLinks from './AdminQuickLinks'
 
 export default async function AdminOverviewPage() {
   // ── Fetch real stats from Supabase ──────────────────────────────────────────
@@ -167,25 +168,7 @@ export default async function AdminOverviewPage() {
         </div>
 
         {/* Quick links */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
-          {[
-            { href: '/admin/users',     icon: '👥', label: 'Users & Orgs' },
-            { href: '/admin/billing',   icon: '💳', label: 'Billing' },
-            { href: '/admin/containers',icon: '🐳', label: 'Containers' },
-            { href: '/admin/security',  icon: '🔒', label: 'Security' },
-            { href: '/admin/roadmap',   icon: '🗺️', label: 'Roadmap' },
-          ].map(({ href, icon, label }) => (
-            <a key={href} href={href} style={{ textDecoration: 'none' }}>
-              <div style={{
-                background: '#0d0d0d', border: '0.5px solid #1e1e1e', borderRadius: '8px',
-                padding: '16px', textAlign: 'center', cursor: 'pointer',
-              }}>
-                <div style={{ fontSize: '24px', marginBottom: '8px' }}>{icon}</div>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>{label}</div>
-              </div>
-            </a>
-          ))}
-        </div>
+        <AdminQuickLinks />
 
       </div>
     </div>
