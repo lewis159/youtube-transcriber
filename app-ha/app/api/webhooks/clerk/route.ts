@@ -47,7 +47,7 @@ export async function POST(req: Request) {
         clerk_user_id: id,
         email: primaryEmail,
         full_name: `${first_name || ''} ${last_name || ''}`.trim(),
-        tier: 'free',
+        tier: 'starter',
       },
       { onConflict: 'clerk_user_id' }
     )
