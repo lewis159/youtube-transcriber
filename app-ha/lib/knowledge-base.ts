@@ -875,4 +875,214 @@ export const KB_ARTICLES: KBArticle[] = [
       },
     ],
   },
+
+  // ─── USER: BILLING ────────────────────────────────────────────────────────
+
+  {
+    slug: 'billing-plans-and-subscriptions',
+    title: 'Billing, plans & subscriptions — upgrade, downgrade and manage your plan',
+    description:
+      'Everything you need to know about YT Transcriber plans: how the four tiers work, how to upgrade through secure checkout, how to cancel or downgrade, where to find invoices, and what happens to your account when a subscription ends.',
+    category: 'account',
+    role: 'user',
+    videoId: null,
+    readTime: 7,
+    steps: [
+      {
+        heading: 'Understand the four plans',
+        body: 'YT Transcriber offers four tiers, each unlocking more capacity and features:\n- Starter — free forever. The default tier for every new account. Ideal for trying the product and light personal use.\n- Pro — paid monthly subscription. Higher usage limits and additional features for regular users.\n- Studio — paid monthly subscription. The highest self-serve tier, for power users and small teams who transcribe at volume.\n- Enterprise — custom pricing, arranged by talking to our team. Designed for organisations needing higher limits, security reviews, or invoicing.\nYour current tier is always shown on your Plan & Usage settings page. Starter, Pro and Studio are self-serve — you can move between them yourself. Enterprise is contact-sales only (see the final step).',
+      },
+      {
+        heading: 'How upgrading works (Stripe Checkout)',
+        body: 'When you choose to upgrade to Pro or Studio, YT Transcriber creates a secure Stripe Checkout session and redirects your browser to Stripe\'s hosted payment page. You enter your card details directly on Stripe — YT Transcriber never sees or stores your card number. The button shows "Redirecting..." while the session is created. Once payment succeeds, Stripe sends you back to your dashboard with the upgrade applied, and you will see your new tier reflected on the Plan & Usage page.',
+      },
+      {
+        heading: 'Upgrade step by step',
+        body: 'To upgrade:\n- Open the Pricing page (or the Upgrade button on your dashboard / Plan & Usage page).\n- Click "Upgrade to Pro" or "Upgrade to Studio".\n- You will be taken to Stripe\'s secure checkout. Enter your email, card details and billing address.\n- Confirm the subscription. Stripe charges your card and sets up a recurring monthly subscription.\n- You are redirected back to your dashboard. Your account tier updates automatically within a few seconds once Stripe confirms the payment.\nNote: billing is currently being rolled out. If you see "Payments coming soon." after clicking upgrade, the live payment system has not been switched on yet for your account — your plan is unchanged and you were not charged.',
+      },
+      {
+        heading: 'What happens behind the scenes',
+        body: 'After a successful checkout, Stripe notifies YT Transcriber that the payment completed. We then update your account record to the new tier and link it to your Stripe customer profile so future billing and changes are tracked automatically. This means your higher limits and features unlock without any manual step on your part. If your tier has not changed a minute or two after paying, refresh the page; if it still has not updated, contact support and we will reconcile it.',
+      },
+      {
+        heading: 'Changing plans (upgrade or downgrade mid-cycle)',
+        body: 'You can switch between Pro and Studio at any time from the Pricing or Plan & Usage page. When you change plans, Stripe automatically prorates the difference: if you upgrade mid-month you are charged only for the remaining days at the higher rate, and if you downgrade you receive a prorated credit applied to your next invoice. Your new limits take effect as soon as the change is confirmed. You do not lose your transcripts when changing plans.',
+      },
+      {
+        heading: 'Cancelling or downgrading to Starter',
+        body: 'To stop a paid subscription, cancel it from your billing settings. When you cancel, your paid features remain active until the end of the period you have already paid for — you are not cut off immediately. At the end of that billing period the subscription ends and your account automatically returns to the free Starter tier. You will not be charged again. You can re-subscribe at any time.',
+      },
+      {
+        heading: 'Managing your payment method',
+        body: 'Your card details are held securely by Stripe, not by YT Transcriber. To update an expiring or replacement card, use the billing management option in your account settings, which opens Stripe\'s secure portal. From there you can change your card, update your billing address, and view your subscription. Keeping a valid card on file ensures your subscription renews without interruption.',
+      },
+      {
+        heading: 'Finding invoices and receipts',
+        body: 'Every successful payment and renewal generates an invoice/receipt from Stripe. Stripe automatically emails a receipt to the email address on your account after each charge. You can also download past invoices (useful for expense claims and accounting) from the Stripe billing portal linked in your account settings. Each invoice shows the plan, the amount, any proration, and applicable tax.',
+      },
+      {
+        heading: 'What happens at the free-tier limit',
+        body: 'Starter accounts have a monthly usage allowance. When you reach it, new transcription jobs are paused until your allowance resets at the start of your next cycle, or until you upgrade. Your existing transcripts always remain available to view, search and export regardless of your remaining allowance — hitting the limit never deletes anything. Upgrading to Pro or Studio immediately raises your limit so you can keep transcribing straight away.',
+      },
+      {
+        heading: 'What happens to your data when a subscription ends',
+        body: 'Cancelling or letting a subscription lapse moves you back to the Starter tier — it does not delete your account or your transcripts. Your transcripts stay in your library and remain viewable, searchable and exportable. The only change is that your usage limits and feature access return to Starter levels. If your library exceeds what Starter normally allows, existing items remain readable; you simply cannot add new ones beyond the free allowance until you upgrade again.',
+      },
+      {
+        heading: 'Enterprise is contact sales',
+        body: 'The Enterprise tier is not purchased through self-serve checkout — it has no online price or "buy" button. Instead, contact our team via the "Contact Sales" option on the Pricing page to discuss custom limits, security and compliance needs, team management, and invoicing. We will tailor a plan and set your account up directly. If you click an Enterprise upgrade action, the system will simply direct you to contact sales rather than charging you.',
+      },
+    ],
+  },
+
+  {
+    slug: 'billing-faq-and-troubleshooting',
+    title: 'Billing FAQ & troubleshooting — payments, charges and refunds',
+    description:
+      'Answers to the most common billing questions: declined cards, unexpected charges, refunds, mid-cycle changes, failed renewals, payment security, and tax and currency.',
+    category: 'account',
+    role: 'user',
+    videoId: null,
+    readTime: 6,
+    steps: [
+      {
+        heading: 'My payment was declined — what do I do?',
+        body: 'A decline almost always comes from the card issuer, not from YT Transcriber. Common causes are insufficient funds, an expired card, an incorrect billing address or postcode, or your bank blocking an unfamiliar online charge. Try again, double-checking the card number, expiry, CVC and billing address. If it still fails, use a different card or contact your bank — they may need to approve the payment. Because checkout is hosted by Stripe, no failed-card details are ever stored by us.',
+      },
+      {
+        heading: 'Why was I charged?',
+        body: 'Paid plans are recurring monthly subscriptions, so you are charged once when you first subscribe and then automatically on the same date each month until you cancel. A charge usually corresponds to either your initial upgrade or an automatic renewal. Stripe emails a receipt for every charge — check that email for the exact plan and amount. If you change plans mid-cycle you may also see a smaller prorated charge for the difference. If a charge looks wrong, contact support with the date and amount and we will investigate.',
+      },
+      {
+        heading: 'What is your refund policy?',
+        body: 'If you believe you were charged in error — for example a renewal you intended to cancel, or a duplicate charge — contact support and we will review it. Approved refunds are issued back to your original payment method through Stripe and typically appear on your statement within 5–10 business days. We cannot refund to a different card than the one charged, as the refund is processed by Stripe against the original payment.',
+      },
+      {
+        heading: 'Changing tiers mid-cycle',
+        body: 'You can move between Pro and Studio at any point. Stripe prorates the change automatically: upgrading mid-cycle charges only the prorated difference for the rest of the period, and downgrading credits the unused portion against your next invoice. You keep all your transcripts when you change tiers — only your limits and features adjust.',
+      },
+      {
+        heading: 'A renewal failed — am I downgraded immediately?',
+        body: 'If an automatic renewal fails (for example your card expired), Stripe will retry the payment over a short period and email you to update your card. Your access is not cut off the instant a single attempt fails. To avoid any interruption, update your card promptly via the billing portal in your account settings. If all retries fail, the subscription ends and your account returns to the free Starter tier — your transcripts remain intact.',
+      },
+      {
+        heading: 'How do I update my card?',
+        body: 'Open your account billing settings and choose the option to manage billing, which opens Stripe\'s secure portal. There you can replace the card on file, fix an expiry date, or update your billing address. Updating your card before the next renewal date prevents failed-payment emails and keeps your subscription active.',
+      },
+      {
+        heading: 'Is payment secure? Do you see my card details?',
+        body: 'Yes, it is secure, and no, we never see your full card details. All payments go through Stripe\'s PCI-compliant hosted checkout. You enter your card directly on Stripe\'s page, not on a YT Transcriber form. We only receive confirmation from Stripe that a payment succeeded plus a reference to your Stripe customer record — never your card number, CVC or full PAN. This is why all card changes happen in Stripe\'s portal rather than in our app.',
+      },
+      {
+        heading: 'VAT, tax and currency',
+        body: 'Prices shown at checkout are the subscription price. Any applicable VAT or sales tax is calculated and displayed by Stripe during checkout based on your billing location, and itemised on the invoice/receipt Stripe emails you. The charge appears in the currency configured for the plan. If you need a tax invoice for your business or a VAT number added, you can enter your business details in Stripe\'s checkout/portal, or contact support for help.',
+      },
+      {
+        heading: 'I paid but my plan did not change',
+        body: 'After a successful payment your tier normally updates within a few seconds. If it has not, first refresh your dashboard or Plan & Usage page. If it still shows the old tier after a couple of minutes, contact support with your account email and the date/time of payment — we can confirm the payment with Stripe and reconcile your tier manually. You will not be double-charged for this.',
+      },
+      {
+        heading: 'I saw "Payments coming soon."',
+        body: 'Billing is being introduced gradually. If you click upgrade and see "Payments coming soon.", live payments have not yet been switched on for your account. You were not charged and your plan is unchanged. Check back later, or contact us if you need a paid plan enabled sooner.',
+      },
+    ],
+  },
+
+  // ─── ADMIN: STRIPE & BILLING OPERATIONS ──────────────────────────────────
+
+  {
+    slug: 'admin-stripe-integration',
+    title: 'Stripe integration & billing operations — how the payment system works',
+    description:
+      'Operator reference for the Stripe integration: the end-to-end checkout → webhook → tier-update flow, every required environment variable, switching between TEST and LIVE mode, configuring the webhook and products, and how the admin Billing page fits in.',
+    category: 'admin-system',
+    role: 'admin',
+    videoId: null,
+    readTime: 8,
+    steps: [
+      {
+        heading: 'The end-to-end flow',
+        body: 'Billing follows a single, well-defined path:\n- A signed-in user clicks Upgrade (UpgradeButton), which POSTs the chosen tier to /api/stripe/checkout.\n- The checkout route authenticates the user via Clerk, looks up their email and stripe_customer_id in Supabase, and creates a Stripe Checkout Session (mode: subscription) with the tier\'s Price ID. The user\'s Clerk ID and tier are stored in the session metadata.\n- The user is redirected to Stripe\'s hosted checkout and pays. On success Stripe returns them to /dashboard?upgraded=1.\n- Stripe sends a webhook to /api/stripe/webhook, which verifies the signature and updates the user\'s tier (and stripe_customer_id) in Supabase.\nThe tier in Supabase is the source of truth the rest of the app reads — Stripe events drive it.',
+      },
+      {
+        heading: 'Required environment variables',
+        body: 'The integration is fully env-driven; no keys or price IDs are hardcoded. Set these (names only — never commit the values):\n- STRIPE_SECRET_KEY — server-side secret key (sk_test_… in test, sk_live_… in live). Its presence is what isStripeConfigured() checks; without it every billing endpoint returns 503.\n- STRIPE_WEBHOOK_SECRET — the webhook signing secret (whsec_…) used to verify incoming webhook signatures. The webhook route also returns 503 if this is missing.\n- STRIPE_PRICE_PRO — the Stripe Price ID for the Pro tier.\n- STRIPE_PRICE_STUDIO — the Stripe Price ID for the Studio tier.\n- NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY — the publishable key (pk_test_… / pk_live_…), safe to expose to the browser.\nAlso ensure NEXT_PUBLIC_APP_URL is set, as the checkout route builds the success and cancel URLs from it. Enterprise has no Price ID by design — it is contact-sales and has no checkout.',
+      },
+      {
+        heading: 'Graceful degradation when unconfigured',
+        body: 'Nothing Stripe-related runs at import time, so the app always builds and boots even with no keys set. isStripeConfigured() returns true only when STRIPE_SECRET_KEY is present. When it is absent, /api/stripe/checkout returns 503 and the UpgradeButton shows "Payments coming soon." The webhook route additionally requires STRIPE_WEBHOOK_SECRET and returns 503 without it. This is intentional so you can ship the code before enabling billing.',
+      },
+      {
+        heading: 'TEST vs LIVE mode and how to switch',
+        body: 'Stripe has fully separate Test and Live environments, each with its own keys, products, prices and webhook endpoints. Billing is being introduced in TEST mode first. To operate in test mode, use the sk_test_…, pk_test_… keys and the test-mode Price IDs and webhook secret. To go live, swap every value to its live equivalent: STRIPE_SECRET_KEY → sk_live_…, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY → pk_live_…, STRIPE_PRICE_PRO / STRIPE_PRICE_STUDIO → the live-mode Price IDs, and STRIPE_WEBHOOK_SECRET → the signing secret of the live-mode webhook endpoint. Test and live objects are never interchangeable — a test Price ID will not work with a live key. Switch all of them together and redeploy.',
+      },
+      {
+        heading: 'Set up the webhook endpoint and signing secret',
+        body: 'In the Stripe dashboard (in the correct mode — Test or Live), go to Developers > Webhooks and add an endpoint pointing at https://YOUR_DOMAIN/api/stripe/webhook. Subscribe it to at least these events: checkout.session.completed, customer.subscription.updated, and customer.subscription.deleted. After creating the endpoint, copy its Signing secret (whsec_…) into STRIPE_WEBHOOK_SECRET. The webhook route reads the raw request body and calls stripe.webhooks.constructEvent to verify the signature — a wrong or missing secret yields a 400 "Invalid signature" and the tier will never update.',
+      },
+      {
+        heading: 'Create Products and Prices and wire the IDs',
+        body: 'In Stripe, create a Product for Pro and a Product for Studio, each with a recurring monthly Price. Copy each Price ID (price_…) into STRIPE_PRICE_PRO and STRIPE_PRICE_STUDIO respectively. The app maps tier → Price ID purely from these env vars (getStripePrices / getPriceForTier), and the webhook reverse-maps an incoming Price ID back to a tier (tierFromPriceId) to know which tier a subscription update corresponds to. Do not create a Price for Enterprise — it is contact-sales and intentionally has no Price ID, so attempting Enterprise checkout returns a 400.',
+      },
+      {
+        heading: 'What each handled webhook event does',
+        body: 'The webhook switches on event.type:\n- checkout.session.completed — reads clerk_user_id and tier from the session metadata and sets the user\'s tier plus stripe_customer_id in Supabase. This is what applies the upgrade right after the first payment.\n- customer.subscription.updated — reads clerk_user_id from the subscription metadata, derives the tier from the subscription\'s current Price ID, and updates the user\'s tier and stripe_customer_id. This handles plan changes (e.g. Pro → Studio).\n- customer.subscription.deleted — reads clerk_user_id and resets the user\'s tier to "starter". This handles cancellations and lapsed subscriptions, returning the user to the free tier.\nAny other event type is acknowledged with { received: true } but ignored.',
+      },
+      {
+        heading: 'How tier updates are written to Supabase',
+        body: 'All tier writes go through a single helper that updates the users table where clerk_user_id matches, setting tier (and, for the two active events, stripe_customer_id). The Supabase admin client is used so the write happens with service privileges from the server. Because tier lives in Supabase, the rest of the app — limits, feature gating, the user\'s Plan & Usage page — reads a single source of truth that Stripe keeps in sync via webhooks.',
+      },
+      {
+        heading: 'How the admin Billing page relates (currently mock)',
+        body: 'The Admin > Billing page in the panel currently shows mock transaction, subscription and refund data — it is a UI placeholder and is not yet wired to live Stripe data. Until it is connected, treat the Stripe dashboard as the authoritative record for payments, invoices, subscriptions and refunds, and use Supabase as the source of truth for a user\'s current tier. When the admin Billing page is later wired to Stripe, it will surface this same data in-app.',
+      },
+      {
+        heading: 'Quick verification checklist',
+        body: 'After configuring or switching modes, verify end to end:\n- Confirm all five env vars (plus NEXT_PUBLIC_APP_URL) are set for the running environment and the app was redeployed.\n- Run a test checkout (Stripe test card 4242 4242 4242 4242 in test mode) and confirm you are redirected to /dashboard?upgraded=1.\n- In Stripe > Webhooks, confirm checkout.session.completed was delivered with a 200 response.\n- Confirm the user\'s tier and stripe_customer_id updated in the Supabase users table.\n- Test a cancellation and confirm the tier resets to starter via customer.subscription.deleted.',
+      },
+    ],
+  },
+
+  // ─── ADMIN: PAYMENT ISSUES & REFUNDS ─────────────────────────────────────
+
+  {
+    slug: 'admin-payment-issues-and-refunds',
+    title: 'Handling payment issues & refunds — support runbook',
+    description:
+      'Support runbook for billing problems: diagnosing failed payments, issuing refunds, handling disputes, manually fixing a tier in Supabase, reconciling a tier that did not update, and what to tell a user whose payment failed.',
+    category: 'admin-users',
+    role: 'admin',
+    videoId: null,
+    readTime: 7,
+    steps: [
+      {
+        heading: 'Where to look first',
+        body: 'Two systems hold the truth. Stripe (in the correct Test/Live mode) is authoritative for payments, charges, subscriptions, invoices, disputes and refunds. The Supabase users table is authoritative for a user\'s current tier and their stripe_customer_id. Most billing tickets are resolved by cross-checking these two: find the customer in Stripe by email, and find the user row in Supabase by clerk_user_id or email. The Admin > Billing page is currently mock data, so do not rely on it for live figures yet.',
+      },
+      {
+        heading: 'Diagnosing a failed payment',
+        body: 'In the Stripe dashboard, open the customer and review their Payments and the failure reason Stripe records (e.g. card_declined, insufficient_funds, expired_card, incorrect_cvc). For a failed renewal, check the subscription\'s status and upcoming/past-due invoices and whether Stripe\'s automatic retries are still in progress. The decline reason tells you what to advise the user — most are card-issuer issues the user resolves by updating their card or contacting their bank.',
+      },
+      {
+        heading: 'Issuing a refund',
+        body: 'Refunds are issued from the Stripe dashboard (the admin Billing page is not yet wired to live Stripe). In Stripe, open the relevant Payment/charge and click Refund. Choose a full or partial amount and confirm. The refund returns to the customer\'s original payment method and typically settles in 5–10 business days. Note that refunding a charge does not by itself change the user\'s tier or cancel their subscription — if they should also lose access, cancel the subscription in Stripe (which fires customer.subscription.deleted and resets them to starter) or adjust the tier in Supabase.',
+      },
+      {
+        heading: 'Handling a disputed charge (chargeback)',
+        body: 'If a customer disputes a charge with their bank, Stripe notifies you and provisionally reverses the funds. Respond inside the Stripe dashboard before the deadline, submitting evidence (subscription history, usage, receipts). Do not also issue a manual refund for a charge that is already under dispute — that can result in paying twice. While the dispute is open, decide whether to suspend access; if appropriate, cancel the subscription in Stripe or downgrade the tier in Supabase.',
+      },
+      {
+        heading: 'Manually adjusting a user\'s tier in Supabase',
+        body: 'When you need to set a tier directly — for goodwill, a comp account, or to fix a sync gap — update the users table in Supabase: set tier to one of starter, pro, studio (or enterprise for contact-sales accounts) on the row matching the user\'s clerk_user_id. This is exactly what the webhook helper does. Use this sparingly: a manual tier change does not create or cancel a Stripe subscription, so a user manually set to pro will not be billed, and a manual change can be overwritten the next time a Stripe webhook fires for that user. For paying customers, prefer changing the subscription in Stripe and letting the webhook update Supabase.',
+      },
+      {
+        heading: 'Reconciling a tier that did not update',
+        body: 'If a user paid but their tier did not change, the payment succeeded in Stripe but the webhook did not apply it. Check, in order:\n- Stripe > Webhooks: was checkout.session.completed delivered, and did it return 200? A non-2xx or no delivery points at a bad endpoint URL or signing secret.\n- That STRIPE_WEBHOOK_SECRET matches the endpoint\'s signing secret (a mismatch yields 400 "Invalid signature").\n- That the session/subscription metadata actually carried clerk_user_id and tier.\n- That a Supabase users row exists with that clerk_user_id.\nOnce you understand why it missed, fix the root cause, then manually set the correct tier (and stripe_customer_id) in Supabase so the user is unblocked immediately. You can also resend the event from the Stripe webhook log.',
+      },
+      {
+        heading: 'What to tell a user whose payment failed',
+        body: 'Reassure them first: a failed payment does not delete their account or transcripts, and access is not cut off the moment one attempt fails — Stripe retries and emails them. Ask them to update their card via the billing portal in their account settings (cards are managed in Stripe, never entered into our app). If the decline reason was issuer-side (insufficient funds, bank block), suggest they contact their bank or try another card. Confirm that if all retries fail the subscription ends and they return to the free Starter tier with their data intact, and they can re-subscribe any time. Never ask a user to send card details over email or chat — all card handling stays in Stripe\'s hosted portal.',
+      },
+    ],
+  },
 ]
