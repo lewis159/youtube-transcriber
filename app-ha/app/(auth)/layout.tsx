@@ -6,11 +6,38 @@ import { UserButton } from '@clerk/nextjs'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: '⚡' },
+  { href: '/knowledge-base', label: 'Knowledge Base', icon: '📖' },
   { href: '/settings', label: 'Settings', icon: '⚙️' },
 ]
 
+const adminItems = [
+  { href: '/admin', label: 'Overview', icon: '🛡️' },
+  { href: '/admin/users', label: 'Users & Orgs', icon: '👥' },
+  { href: '/admin/billing', label: 'Billing', icon: '💳' },
+  { href: '/admin/containers', label: 'Containers', icon: '🐳' },
+  { href: '/admin/security', label: 'Security', icon: '🔒' },
+  { href: '/admin/roadmap', label: 'Roadmap', icon: '🗺️' },
+  { href: '/admin/changelog', label: 'Changelog', icon: '🕐' },
+]
+
+type Role = 'global_admin' | 'support' | 'org_admin' | 'user'
+
+function RoleBadge({ role }: { role: Role }) {
+  if (role === 'global_admin') return (
+    <span style={{ fontSize: '10px', padding: '2px 7px', borderRadius: '4px', background: 'rgba(229,57,53,0.12)', color: '#E53935', border: '0.5px solid rgba(229,57,53,0.3)', fontWeight: 700 }}>Global Admin</span>
+  )
+  if (role === 'support') return (
+    <span style={{ fontSize: '10px', padding: '2px 7px', borderRadius: '4px', background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '0.5px solid rgba(59,130,246,0.3)', fontWeight: 700 }}>Support</span>
+  )
+  if (role === 'org_admin') return (
+    <span style={{ fontSize: '10px', padding: '2px 7px', borderRadius: '4px', background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '0.5px solid rgba(245,158,11,0.3)', fontWeight: 700 }}>Org Admin</span>
+  )
+  return null
+}
+
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const isAdmin = pathname.startsWith('/admin')
 
   return (
     <div style={{
@@ -41,8 +68,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <span style={{ color: 'var(--text-primary)' }}> Transcriber</span>
           </Link>
           <nav style={{ display: 'flex', gap: '4px' }}>
-            {navItems.map(({ href, label, icon }) => {
-              const active = pathname === href || pathname.startsWith(href + '/')
+            {(isAdmin ? adminItems : navItems).map(({ href, label, icon }) => {
+              // For admin overview: exact match; for sub-pages: prefix match but not just /admin
+              const active = href === '/admin'
+                ? pathname === '/admin'
+                : pathname === href || pathname.startsWith(href + '/')
               return (
                 <Link
                   key={href}
@@ -69,11 +99,40 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             })}
           </nav>
         </div>
-        <UserButton afterSignOutUrl="/" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {!isAdmin && (
+            <Link
+              href="/admin"
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '5px 12px', borderRadius: '6px', fontSize: '12px',
+                color: '#E53935', background: 'rgba(229,57,53,0.08)',
+                border: '0.5px solid rgba(229,57,53,0.2)', textDecoration: 'none',
+              }}
+            >
+              🛡️ Admin
+            </Link>
+          )}
+          {isAdmin && (
+            <Link
+              href="/dashboard"
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '5px 12px', borderRadius: '6px', fontSize: '12px',
+                color: 'var(--text-secondary)', background: 'transparent',
+                border: '0.5px solid #2a2a2a', textDecoration: 'none',
+              }}
+            >
+              ← App
+            </Link>
+          )}
+          {isAdmin && <RoleBadge role="global_admin" />}
+          <UserButton afterSignOutUrl="/" />
+        </div>
       </header>
 
       {/* Page content */}
-      <main style={{ flex: 1, padding: '40px 32px', maxWidth: '1280px', width: '100%', margin: '0 auto' }}>
+      <main style={{ flex: 1, ...(isAdmin ? {} : { padding: '40px 32px', maxWidth: '1280px', width: '100%', margin: '0 auto' }) }}>
         {children}
       </main>
 
