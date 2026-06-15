@@ -3,6 +3,7 @@ export type KBCategory =
   | 'getting-started'
   | 'features'
   | 'account'
+  | 'troubleshooting'
   | 'admin-users'
   | 'admin-system'
   | 'admin-architecture'
@@ -20,6 +21,8 @@ export interface KBArticle {
   role: KBRole
   videoId: string | null // YouTube video ID, null = coming soon
   readTime: number // minutes
+  tags: string[] // flat, combinable: topic/feature + audience:* + difficulty:* + type:*
+  lastUpdated: string // ISO date (YYYY-MM-DD)
   steps: KBStep[]
 }
 
@@ -35,6 +38,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'user',
     videoId: null,
     readTime: 2,
+    tags: ['transcription', 'audience:user', 'difficulty:getting-started', 'type:how-to'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Create your account',
@@ -50,7 +55,7 @@ export const KB_ARTICLES: KBArticle[] = [
       },
       {
         heading: 'Wait for processing to complete',
-        body: 'Most videos complete in 30–90 seconds depending on length. The card badge will change from "Processing" to "Ready" when the transcript is available. You do not need to keep the page open — you will see the updated status the next time you visit.',
+        body: 'Most videos complete within a minute or two, though it varies with video length and how busy the queue is. The card badge will change from "Processing" to "Ready" when the transcript is available. You do not need to keep the page open — you will see the updated status the next time you visit.',
       },
       {
         heading: 'View your transcript',
@@ -68,6 +73,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'user',
     videoId: null,
     readTime: 2,
+    tags: ['search', 'audience:user', 'difficulty:getting-started', 'type:how-to'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Open a video detail page',
@@ -97,6 +104,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'user',
     videoId: null,
     readTime: 3,
+    tags: ['export', 'audience:user', 'difficulty:getting-started', 'type:reference'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Open the video detail page',
@@ -104,11 +113,11 @@ export const KB_ARTICLES: KBArticle[] = [
       },
       {
         heading: 'Click the Export button',
-        body: 'In the toolbar at the top of the transcript panel, click the "Export" button (it looks like a download arrow icon). A dropdown menu will appear with three format options.',
+        body: 'In the toolbar at the top of the transcript panel, click the "Export" button (it looks like a download arrow icon). A dropdown menu will appear with the available format options.',
       },
       {
         heading: 'Choose your format',
-        body: 'Select one of the three available formats:\n- TXT — Plain text file. Best for copying the transcript into a word processor, notes app, or AI prompt. No formatting, just the words.\n- PDF — Formatted document with the video title, thumbnail, and timestamps. Best for sharing with colleagues or archiving.\n- SRT — SubRip Subtitle file. Best for video editors who want to burn captions into a video or upload subtitles to YouTube/Vimeo.',
+        body: 'Select one of the available formats:\n- TXT — Plain text file. Best for copying the transcript into a word processor, notes app, or AI prompt. No formatting, just the words.\n- PDF — Formatted document with the video title, thumbnail, and timestamps. Best for sharing with colleagues or archiving.\n- SRT — SubRip Subtitle file. Best for video editors who want to burn captions into a video or upload subtitles to YouTube/Vimeo.\n- ZIP — A bundle of multiple transcripts (and/or formats) packaged into a single archive. Best when you want to download a whole folder of transcripts at once rather than one file at a time.',
       },
       {
         heading: 'Download your file',
@@ -126,6 +135,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'user',
     videoId: null,
     readTime: 2,
+    tags: ['folders', 'audience:user', 'difficulty:getting-started', 'type:how-to'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Create a new folder',
@@ -155,6 +166,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'user',
     videoId: null,
     readTime: 3,
+    tags: ['share-links', 'audience:user', 'difficulty:intermediate', 'type:how-to'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Open the video detail page',
@@ -188,6 +201,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'user',
     videoId: null,
     readTime: 3,
+    tags: ['billing', 'account', 'audience:user', 'difficulty:getting-started', 'type:reference'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'View your current usage',
@@ -199,7 +214,7 @@ export const KB_ARTICLES: KBArticle[] = [
       },
       {
         heading: 'Understand the Pro plan',
-        body: 'Pro is designed for content creators and students. It includes:\n- 10 transcripts per month\n- TXT and PDF export\n- Folder organisation\n- Unlimited transcript retention\n- Share links\n- URL screenshots',
+        body: 'Pro is designed for content creators and students. It includes:\n- 100 transcripts per month\n- TXT and PDF export\n- Folder organisation\n- Unlimited transcript retention\n- Share links',
       },
       {
         heading: 'Understand the Studio plan',
@@ -225,6 +240,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'user',
     videoId: null,
     readTime: 2,
+    tags: ['notes', 'audience:user', 'difficulty:getting-started', 'type:how-to'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Open the video detail page',
@@ -254,10 +271,12 @@ export const KB_ARTICLES: KBArticle[] = [
     title: 'What to do if a transcript is missing or incorrect',
     description:
       'Troubleshoot common transcription problems — from missing captions to garbled text — and find out when to contact support.',
-    category: 'getting-started',
+    category: 'troubleshooting',
     role: 'user',
     videoId: null,
     readTime: 3,
+    tags: ['transcription', 'captions', 'audience:user', 'difficulty:intermediate', 'type:troubleshooting'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Check if the video has captions on YouTube',
@@ -282,6 +301,173 @@ export const KB_ARTICLES: KBArticle[] = [
     ],
   },
 
+  {
+    slug: 'why-didnt-my-video-transcribe',
+    title: "Why didn't my video transcribe? (captions required)",
+    description:
+      'YT Transcriber works from a video’s YouTube captions — it does not listen to the audio. If a video has no captions, it cannot be transcribed. Here’s how to tell, and what to do about it.',
+    category: 'troubleshooting',
+    role: 'user',
+    videoId: null,
+    readTime: 3,
+    tags: ['transcription', 'captions', 'audience:user', 'difficulty:getting-started', 'type:troubleshooting'],
+    lastUpdated: '2026-06-15',
+    steps: [
+      {
+        heading: 'How YT Transcriber actually works',
+        body: 'YT Transcriber pulls the existing caption track from YouTube — it does NOT perform speech-to-text on the audio. This makes transcription fast and accurate, but it has one hard requirement: the video must already have captions on YouTube. If a video has no caption track at all, there is nothing for us to fetch, and the job will fail with a "no captions available" error. This is the single most common reason a video does not transcribe.',
+      },
+      {
+        heading: 'Check whether the video has captions',
+        body: 'Open the video directly on YouTube.com and click the CC (Closed Captions) button on the player. If captions appear, the video can be transcribed. If the CC button is greyed out or missing, the video has no captions and cannot be transcribed at this time. Both creator-uploaded (manual) captions and YouTube’s auto-generated captions work — you just need one of them to exist.',
+      },
+      {
+        heading: 'Make sure the video is public',
+        body: 'We can only read captions from public videos. Private and unlisted videos return an error even if they have captions. If the video was only just made public, wait a minute or two and try again — YouTube sometimes takes a moment to expose the caption track.',
+      },
+      {
+        heading: 'Try again or pick a different source',
+        body: 'If the video genuinely has captions but still failed, open it on your Dashboard, click the three-dot menu (⋯) and choose "Re-transcribe" to submit a fresh job — this clears up transient network failures. If the video simply has no captions, there is no workaround within YT Transcriber today (we do not generate captions from audio). Look for a captioned version of the same content, or ask the creator to enable captions.',
+      },
+      {
+        heading: 'Still stuck? Contact support',
+        body: 'If a public, captioned video repeatedly fails, go to Settings > Help & Support and submit a ticket with the YouTube URL. Our team will investigate and reply within one business day.',
+      },
+    ],
+  },
+
+  {
+    slug: 'supported-languages',
+    title: 'What languages are supported?',
+    description:
+      'Because YT Transcriber reads YouTube’s caption track rather than transcribing audio, the languages we support are whatever caption languages a given video already provides on YouTube.',
+    category: 'getting-started',
+    role: 'user',
+    videoId: null,
+    readTime: 2,
+    tags: ['transcription', 'captions', 'audience:user', 'difficulty:getting-started', 'type:reference'],
+    lastUpdated: '2026-06-15',
+    steps: [
+      {
+        heading: 'Language support follows YouTube captions',
+        body: 'YT Transcriber does not translate or transcribe audio — it fetches the caption track YouTube already has. That means the languages available for any given video are exactly the caption languages that video offers on YouTube. If a video has English captions, you get an English transcript; if it has Spanish captions, you get a Spanish transcript.',
+      },
+      {
+        heading: 'How to see which languages a video offers',
+        body: 'On YouTube, open the video, click the gear (Settings) icon on the player, then "Subtitles/CC". The list shows every caption language available for that video, including any auto-translated tracks YouTube provides. Whatever appears there is what YT Transcriber can pull.',
+      },
+      {
+        heading: 'Auto-generated vs manual captions',
+        body: 'Many videos only have YouTube’s auto-generated captions, which exist for a wide range of spoken languages but can be lower quality for strong accents, background noise, or technical vocabulary. Creator-uploaded (manual) captions are usually more accurate. Both work with YT Transcriber.',
+      },
+      {
+        heading: 'What we do not do (yet)',
+        body: 'We do not transcribe audio that has no captions, and we do not translate a transcript into a language the video does not already provide captions for. If you need a language that YouTube does not offer captions for on that video, YT Transcriber cannot produce it today.',
+      },
+    ],
+  },
+
+  {
+    slug: 'privacy-and-data-handling',
+    title: 'Your privacy & how we handle your data',
+    description:
+      'A plain-English summary of what data YT Transcriber stores, how it is protected, who can see your transcripts, and the controls you have over your own data.',
+    category: 'account',
+    role: 'user',
+    videoId: null,
+    readTime: 4,
+    tags: ['privacy', 'account', 'security', 'audience:user', 'difficulty:getting-started', 'type:concept'],
+    lastUpdated: '2026-06-15',
+    steps: [
+      {
+        heading: 'What we store',
+        body: 'We store the data needed to run your account and your library:\n- Your account details (email and authentication identity, handled by our auth provider Clerk).\n- The videos you transcribe: the YouTube URL/ID, video metadata (title, thumbnail), and the transcript text we fetched from YouTube’s captions.\n- Anything you create in the app: folders, notes, and share links.\nWe do not store your payment card details — those are held by Stripe, our payment processor, never by YT Transcriber.',
+      },
+      {
+        heading: 'Your transcripts are private by default',
+        body: 'Your library is visible only to you. Other users cannot see your transcripts, folders, or notes. A transcript only becomes viewable by someone else if YOU create a share link for it — and even then your notes are never included in a share link. You stay in control of what, if anything, you share.',
+      },
+      {
+        heading: 'How your data is protected',
+        body: 'Data is stored in our managed database (Supabase) with Row Level Security, so the system enforces that you can only ever read your own rows — even if there were a bug in the application layer. Traffic is encrypted in transit over HTTPS. Authentication is handled by Clerk, and sensitive server secrets are kept out of the browser and out of the database.',
+      },
+      {
+        heading: 'Sharing and third parties',
+        body: 'To provide the service we rely on a small number of processors: YouTube (to fetch captions), Clerk (authentication), Supabase (database/storage) and Stripe (payments, for paid plans only). We do not sell your data or your transcripts to advertisers.',
+      },
+      {
+        heading: 'Your controls',
+        body: 'You can delete individual videos, folders, notes and share links at any time from the app. You can export your transcripts (TXT, PDF, SRT, ZIP) whenever you like. You can also delete your entire account and the data attached to it — see the article "Deleting your account and exporting your data" for how.',
+      },
+    ],
+  },
+
+  {
+    slug: 'free-tier-limit',
+    title: 'What happens when you hit your free-tier limit',
+    description:
+      'The free Starter plan includes a fixed number of transcripts. Here’s exactly what happens when you reach the limit, what stays available, and how to get more.',
+    category: 'account',
+    role: 'user',
+    videoId: null,
+    readTime: 3,
+    tags: ['billing', 'account', 'audience:user', 'difficulty:getting-started', 'type:concept'],
+    lastUpdated: '2026-06-15',
+    steps: [
+      {
+        heading: 'What the Starter limit is',
+        body: 'Starter is the free tier and includes 5 transcripts. Once you have used your full allowance, you have reached the free-tier limit. You can always see how many you have used and how many remain on the Plan & Usage tab in Settings.',
+      },
+      {
+        heading: 'What happens when you hit the limit',
+        body: 'New transcription jobs are paused. When you try to transcribe another video, instead of starting a job the app shows a message telling you that you have reached your Starter limit and offers an upgrade. Nothing is charged and nothing breaks — you simply cannot start new transcripts until you have more capacity.',
+      },
+      {
+        heading: 'Your existing transcripts stay available',
+        body: 'Hitting the limit never deletes anything. Every transcript you have already created remains fully available to view, search, and export (TXT, PDF, SRT, ZIP). The only thing the limit affects is creating NEW transcripts.',
+      },
+      {
+        heading: 'How to get more',
+        body: 'You have two options:\n- Upgrade to a paid plan. Pro and Studio have much higher monthly allowances, and upgrading raises your limit immediately so you can keep transcribing straight away. Go to the Pricing or Plan & Usage page and choose a plan.\n- Wait for your cycle to reset, if the plan you are on has a recurring monthly allowance.\nStarter’s allowance is a total, so if you need ongoing capacity, upgrading is the way forward.',
+      },
+    ],
+  },
+
+  {
+    slug: 'delete-account-and-export-data',
+    title: 'Deleting your account and exporting your data',
+    description:
+      'How to take your transcripts with you before you go, and how to permanently delete your YT Transcriber account and the data attached to it.',
+    category: 'account',
+    role: 'user',
+    videoId: null,
+    readTime: 3,
+    tags: ['account', 'privacy', 'export', 'audience:user', 'difficulty:getting-started', 'type:how-to'],
+    lastUpdated: '2026-06-15',
+    steps: [
+      {
+        heading: 'Export your transcripts first',
+        body: 'Deletion is permanent, so export anything you want to keep before you start. Open each video and use the Export button to download it as TXT, PDF or SRT, or use ZIP export to download multiple transcripts at once. Once your account is deleted these are gone, so make sure you have local copies of anything important.',
+      },
+      {
+        heading: 'Cancel any paid subscription',
+        body: 'If you are on a paid plan, cancel your subscription before deleting your account so you are not billed again. You can cancel from your billing settings; your paid features remain until the end of the period you have already paid for. See the billing articles for details.',
+      },
+      {
+        heading: 'Delete your account',
+        body: 'Go to Settings and open the account/danger-zone section, then choose to delete your account. You will be asked to confirm, because this cannot be undone. Deleting your account removes your profile and the data associated with it — your transcripts, folders, notes and share links — and signs you out.',
+      },
+      {
+        heading: 'What deletion removes',
+        body: 'Account deletion removes your YT Transcriber data: your account record, your transcripts and their metadata, your folders, notes, and any share links you created (which immediately stop working). Your authentication record with Clerk and any payment history retained by Stripe for legal/accounting reasons are handled by those providers under their own policies.',
+      },
+      {
+        heading: 'Need help?',
+        body: 'If you would like a copy of your data prepared for you, or you have a question about what is retained, go to Settings > Help & Support and submit a request before deleting your account, and our team will assist.',
+      },
+    ],
+  },
+
   // ─── ADMIN: USERS & BILLING ──────────────────────────────────────────────
 
   {
@@ -293,6 +479,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 4,
+    tags: ['account', 'billing', 'audit', 'audience:admin', 'difficulty:intermediate', 'type:how-to'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Navigate to Admin > Users',
@@ -330,6 +518,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 3,
+    tags: ['billing', 'audit', 'audience:admin', 'difficulty:intermediate', 'type:how-to'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Navigate to Admin > Billing',
@@ -363,6 +553,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 4,
+    tags: ['docker', 'scaling', 'audience:admin', 'difficulty:intermediate', 'type:reference'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Navigate to Admin > Containers',
@@ -396,6 +588,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 4,
+    tags: ['organisations', 'account', 'audience:admin', 'difficulty:intermediate', 'type:how-to'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Navigate to Admin > Organisations',
@@ -429,6 +623,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 3,
+    tags: ['account', 'audit', 'audience:admin', 'difficulty:intermediate', 'type:how-to'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Navigate to Admin > Feature Flags',
@@ -444,7 +640,7 @@ export const KB_ARTICLES: KBArticle[] = [
       },
       {
         heading: 'Understand override vs tier default',
-        body: 'An override only affects the specific user or organisation you selected. It does not change the tier default for anyone else. For example, you can give a single Creator-tier user access to SRT exports without upgrading their account. Overrides are recorded in the audit log.',
+        body: 'An override only affects the specific user or organisation you selected. It does not change the tier default for anyone else. For example, you can give a single Pro-tier user access to SRT exports without upgrading their account. Overrides are recorded in the audit log.',
       },
       {
         heading: 'Remove an override',
@@ -462,6 +658,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 3,
+    tags: ['audit', 'security', 'audience:admin', 'difficulty:intermediate', 'type:reference'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Navigate to Admin > Audit Log',
@@ -495,6 +693,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 5,
+    tags: ['deployment', 'secrets', 'docker', 'audience:admin', 'difficulty:advanced', 'type:how-to'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Clone the repository and copy the env file',
@@ -530,6 +730,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 5,
+    tags: ['architecture', 'nginx', 'redis', 'docker', 'audience:admin', 'difficulty:advanced', 'type:concept'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'The three-tier architecture at a glance',
@@ -563,14 +765,16 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 4,
+    tags: ['docker', 'architecture', 'nginx', 'redis', 'scaling', 'audience:admin', 'difficulty:advanced', 'type:reference'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Nginx containers',
-        body: 'Container name: yt-nginx\nPort: 80 (HTTP), 443 (HTTPS)\nRole: Reverse proxy and load balancer. Receives all external traffic and forwards it to app containers. Reads the upstream config dynamically so it can add or remove app containers without restarting.',
+        body: 'Service names: nginx-ha-1, nginx-ha-2\nPort: 80 (HTTP), 443 (HTTPS)\nRole: Reverse proxy and load balancer. Receives all external traffic and forwards it to app containers. Reads the upstream config dynamically so it can add or remove app containers without restarting.',
       },
       {
         heading: 'App containers',
-        body: 'Container names: yt-app-1, yt-app-2, … (autoscaled)\nPort: 3000 (internal only, not exposed externally)\nRole: Runs the Next.js application. Each instance is identical and stateless. Nginx routes traffic across all healthy app containers. The autoscaler can spin up additional instances (yt-app-3, etc.) when load is high.',
+        body: 'Service names: app-ha-1, app-ha-2 (Swarm replicas, scaled as needed)\nPort: 3000 (internal only, not exposed externally)\nRole: Runs the Next.js application. Each instance is identical and stateless. Nginx routes traffic across all healthy app containers. Docker Swarm can spin up additional replicas when load is high.',
       },
       {
         heading: 'Redis containers',
@@ -582,7 +786,7 @@ export const KB_ARTICLES: KBArticle[] = [
       },
       {
         heading: 'Docker network communication',
-        body: 'All containers are attached to a shared Docker bridge network named yt-network. Containers communicate with each other by container name (e.g. the app connects to Redis using the hostname redis-master:6379). No container ports are exposed to the internet except Nginx ports 80 and 443. This network isolation is a core security boundary.',
+        body: 'All containers are attached to a shared Docker Swarm overlay network. Containers communicate with each other by service name (e.g. the app connects to Redis using the hostname redis-master:6379). No container ports are exposed to the internet except Nginx ports 80 and 443. This network isolation is a core security boundary.',
       },
     ],
   },
@@ -596,6 +800,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 5,
+    tags: ['redis', 'architecture', 'audience:admin', 'difficulty:advanced', 'type:concept'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Master / replica replication',
@@ -629,14 +835,16 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 4,
+    tags: ['nginx', 'architecture', 'scaling', 'audience:admin', 'difficulty:advanced', 'type:concept'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'The upstream block',
-        body: 'In the Nginx config, an upstream block defines the pool of app containers that can receive traffic. Each container\'s internal address (e.g. yt-app-1:3000, yt-app-2:3000) is listed as a server directive. Nginx automatically adds or removes servers from this list when the autoscaler updates the config and sends a SIGHUP reload signal.',
+        body: 'In the Nginx config, an upstream block defines the pool of app containers that can receive traffic. Each container\'s internal address (e.g. app-ha-1:3000, app-ha-2:3000) is listed as a server directive. Nginx automatically adds or removes servers from this list when the autoscaler updates the config and sends a SIGHUP reload signal.',
       },
       {
         heading: 'Round-robin load balancing',
-        body: 'By default, Nginx distributes incoming requests across app containers in round-robin order: request 1 goes to yt-app-1, request 2 to yt-app-2, request 3 back to yt-app-1, and so on. Because the app containers are stateless, any container can handle any request without needing to share session data.',
+        body: 'By default, Nginx distributes incoming requests across app containers in round-robin order: request 1 goes to app-ha-1, request 2 to app-ha-2, request 3 back to app-ha-1, and so on. Because the app containers are stateless, any container can handle any request without needing to share session data.',
       },
       {
         heading: 'Active health checks',
@@ -662,6 +870,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 5,
+    tags: ['architecture', 'docker', 'redis', 'nginx', 'scaling', 'audience:admin', 'difficulty:advanced', 'type:concept'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Scenario 1: An app container fails',
@@ -669,11 +879,11 @@ export const KB_ARTICLES: KBArticle[] = [
       },
       {
         heading: 'Scenario 2: All app containers fail simultaneously',
-        body: 'Impact: The site is down. Users see a 502 Bad Gateway or 503 Service Unavailable error from Nginx.\nWhat happens: Nginx has no healthy upstreams and returns an error. The autoscaler should detect this and restart containers. Docker\'s restart policy (restart: always) will also attempt to restart crashed containers automatically.\nRecovery: Usually within 30–60 seconds as containers restart and pass health checks.',
+        body: 'Impact: The site is down. Users see a 502 Bad Gateway or 503 Service Unavailable error from Nginx.\nWhat happens: Nginx has no healthy upstreams and returns an error. The autoscaler should detect this and restart containers. Docker Swarm\'s restart policy will also reschedule failed replicas automatically.\nRecovery: Usually within 30–60 seconds as containers restart and pass health checks.',
       },
       {
         heading: 'Scenario 3: The Nginx container fails',
-        body: 'Impact: The site is completely unreachable from the internet — all traffic enters via Nginx.\nWhat happens: Docker\'s restart policy kicks in immediately and attempts to restart the container. Because Nginx is a single point of entry, this is the highest-impact failure.\nRecovery: Usually within 10–20 seconds. For higher availability, consider running two Nginx instances behind a hardware or cloud load balancer (e.g. AWS ALB or Cloudflare).',
+        body: 'Impact: The site is completely unreachable from the internet — all traffic enters via Nginx.\nWhat happens: Docker Swarm\'s restart policy kicks in immediately and reschedules the nginx replica. The stack already runs two nginx replicas (nginx-ha-1 and nginx-ha-2), so the second instance continues serving traffic while the failed one is replaced.\nRecovery: Usually within 10–20 seconds. For even higher availability, place the nginx replicas behind a hardware or cloud load balancer (e.g. AWS ALB or Cloudflare).',
       },
       {
         heading: 'Scenario 4: The Redis master fails',
@@ -695,6 +905,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 4,
+    tags: ['scaling', 'docker', 'architecture', 'audience:admin', 'difficulty:advanced', 'type:concept'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Scale-up trigger: the 70% CPU threshold',
@@ -728,10 +940,12 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 4,
+    tags: ['deployment', 'docker', 'architecture', 'nginx', 'audience:admin', 'difficulty:advanced', 'type:concept'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'What a rolling deployment is',
-        body: 'A rolling deployment replaces containers one at a time rather than all at once. At any point during the deployment, some containers are running the old version and some are running the new version. Because the app is stateless and both versions can serve requests simultaneously, users experience no downtime.',
+        body: 'A rolling deployment replaces containers one at a time rather than all at once. At any point during the deployment, some containers are running the old version and some are running the new version. Because the app is stateless and both versions can serve requests simultaneously, users experience no downtime.\n\nThis article explains the concept of how zero-downtime rollouts work. For the concrete step-by-step commands to ship a build to production, see "Deploying a new build to production", which is the operational runbook.',
       },
       {
         heading: 'Step 1: New container spins up',
@@ -761,6 +975,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 5,
+    tags: ['caching', 'nginx', 'security', 'audience:admin', 'difficulty:advanced', 'type:how-to'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Why cache at the edge',
@@ -794,6 +1010,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 4,
+    tags: ['caching', 'nginx', 'audience:admin', 'difficulty:advanced', 'type:reference'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Gzip compression',
@@ -827,6 +1045,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 5,
+    tags: ['secrets', 'security', 'architecture', 'audience:admin', 'difficulty:advanced', 'type:concept'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Tier 1: Public keys',
@@ -856,6 +1076,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 3,
+    tags: ['deployment', 'docker', 'audience:admin', 'difficulty:advanced', 'type:how-to'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'CI builds and pushes the image',
@@ -887,6 +1109,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'user',
     videoId: null,
     readTime: 7,
+    tags: ['billing', 'account', 'audience:user', 'difficulty:intermediate', 'type:reference'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Understand the four plans',
@@ -944,6 +1168,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'user',
     videoId: null,
     readTime: 6,
+    tags: ['billing', 'account', 'audience:user', 'difficulty:intermediate', 'type:troubleshooting'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'My payment was declined — what do I do?',
@@ -999,6 +1225,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 8,
+    tags: ['billing', 'secrets', 'deployment', 'audience:admin', 'difficulty:advanced', 'type:reference'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'The end-to-end flow',
@@ -1054,6 +1282,8 @@ export const KB_ARTICLES: KBArticle[] = [
     role: 'admin',
     videoId: null,
     readTime: 7,
+    tags: ['billing', 'account', 'audience:admin', 'difficulty:advanced', 'type:troubleshooting'],
+    lastUpdated: '2026-06-15',
     steps: [
       {
         heading: 'Where to look first',

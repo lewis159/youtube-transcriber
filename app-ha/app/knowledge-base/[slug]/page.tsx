@@ -1,12 +1,46 @@
+import type { Metadata } from 'next'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { auth } from '@clerk/nextjs/server'
 import { KB_ARTICLES, KBArticle, KBCategory } from '@/lib/knowledge-base'
 import ExportPdfButton from './ExportPdfButton'
+import HelpfulButtons from './HelpfulButtons'
 
 // ── Static params ────────────────────────────────────────────────────────────
 export async function generateStaticParams() {
   return KB_ARTICLES.map((a) => ({ slug: a.slug }))
+}
+
+// ── Per-article SEO metadata ─────────────────────────────────────────────────
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}): Promise<Metadata> {
+  const { slug } = await params
+  const article = KB_ARTICLES.find((a) => a.slug === slug)
+
+  if (!article) {
+    return { title: 'Article not found — YT Transcriber Knowledge Base' }
+  }
+
+  const title = `${article.title} — YT Transcriber Knowledge Base`
+
+  return {
+    title,
+    description: article.description,
+    keywords: article.tags,
+    openGraph: {
+      title,
+      description: article.description,
+      type: 'article',
+    },
+    twitter: {
+      card: 'summary',
+      title,
+      description: article.description,
+    },
+  }
 }
 
 // ── Category labels ──────────────────────────────────────────────────────────
@@ -14,6 +48,7 @@ const CATEGORY_LABELS: Record<KBCategory, string> = {
   'getting-started': 'Getting Started',
   'features': 'Features',
   'account': 'Account & Plans',
+  'troubleshooting': 'Troubleshooting',
   'admin-users': 'Users & Billing',
   'admin-system': 'System Management',
   'admin-architecture': 'Architecture',
@@ -27,101 +62,38 @@ function getRelated(current: KBArticle): KBArticle[] {
 }
 
 // ── Video section ────────────────────────────────────────────────────────────
+// Only renders when the article has a real videoId. When videoId is null there
+// is no placeholder — the step-by-step content moves straight to the top.
 function VideoSection({ article }: { article: KBArticle }) {
-  if (article.videoId) {
-    return (
-      <div
-        style={{
-          position: 'relative',
-          width: '100%',
-          paddingBottom: '56.25%', // 16:9
-          marginBottom: '48px',
-          borderRadius: '12px',
-          overflow: 'hidden',
-        }}
-      >
-        <iframe
-          src={`https://www.youtube.com/embed/${article.videoId}`}
-          title={article.title}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          style={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            border: 'none',
-            borderRadius: '12px',
-          }}
-        />
-      </div>
-    )
+  if (!article.videoId) {
+    return null
   }
 
-  // Coming soon placeholder
   return (
     <div
       style={{
+        position: 'relative',
         width: '100%',
         paddingBottom: '56.25%', // 16:9
-        position: 'relative',
         marginBottom: '48px',
+        borderRadius: '12px',
+        overflow: 'hidden',
       }}
     >
-      <div
+      <iframe
+        src={`https://www.youtube.com/embed/${article.videoId}`}
+        title={article.title}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'var(--bg-elevated)',
-          border: '1px solid var(--border-default)',
+          width: '100%',
+          height: '100%',
+          border: 'none',
           borderRadius: '12px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '16px',
         }}
-      >
-        {/* Play button icon */}
-        <div
-          style={{
-            width: '72px',
-            height: '72px',
-            background: 'var(--accent)',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            opacity: 0.7,
-            boxShadow: '0 0 32px var(--accent-glow)',
-          }}
-        >
-          <svg
-            width="28"
-            height="28"
-            viewBox="0 0 24 24"
-            fill="white"
-            style={{ marginLeft: '4px' }}
-          >
-            <path d="M8 5v14l11-7z" />
-          </svg>
-        </div>
-        <div style={{ textAlign: 'center', padding: '0 24px' }}>
-          <p
-            style={{
-              fontSize: '16px',
-              fontWeight: 700,
-              color: 'var(--text-primary)',
-              margin: '0 0 6px',
-            }}
-          >
-            Video guide coming soon
-          </p>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
-            {article.title}
-          </p>
-        </div>
-      </div>
+      />
     </div>
   )
 }
@@ -281,6 +253,16 @@ export default async function KBArticlePage({
               Admin only
             </span>
           )}
+
+          {/* Last updated */}
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+            Last updated{' '}
+            {new Date(article.lastUpdated).toLocaleDateString('en-GB', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            })}
+          </span>
         </div>
       </div>
 
@@ -375,34 +357,7 @@ export default async function KBArticlePage({
       </section>
 
       {/* ── Was this helpful? ─────────────────────────────────────────── */}
-      <section
-        data-print-hide
-        className="glass-card"
-        style={{
-          padding: '28px',
-          textAlign: 'center',
-          marginBottom: '48px',
-        }}
-      >
-        <p
-          style={{
-            fontSize: '15px',
-            fontWeight: 600,
-            color: 'var(--text-primary)',
-            margin: '0 0 16px',
-          }}
-        >
-          Was this article helpful?
-        </p>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
-          <button className="btn-secondary" style={{ padding: '10px 24px', fontSize: '15px' }}>
-            👍 Yes
-          </button>
-          <button className="btn-secondary" style={{ padding: '10px 24px', fontSize: '15px' }}>
-            👎 No
-          </button>
-        </div>
-      </section>
+      <HelpfulButtons slug={article.slug} />
 
       {/* ── Related articles ──────────────────────────────────────────── */}
       {related.length > 0 && (
