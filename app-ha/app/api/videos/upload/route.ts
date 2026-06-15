@@ -4,12 +4,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createVideo, updateVideoStatus, saveTranscript } from '@/lib/supabase'
 import { fetchTranscript, extractYouTubeId, getYouTubeThumbnail } from '@/lib/transcript'
+import { checkUserFeature, upgradeRequired } from '@/lib/feature-flags'
 
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth()
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Feature gate: transcribe
+    const canTranscribe = await checkUserFeature(userId, 'transcribe')
+    if (!canTranscribe) {
+      return NextResponse.json(upgradeRequired('transcribe'), { status: 403 })
     }
 
     const { youtubeUrl, title } = await request.json()
