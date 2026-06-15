@@ -8,6 +8,7 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: '⚡' },
   { href: '/knowledge-base', label: 'Knowledge Base', icon: '📖' },
   { href: '/settings', label: 'Settings', icon: '⚙️' },
+  { href: '/admin', label: 'Admin', icon: '🛡️' },
 ]
 
 const adminItems = [
@@ -85,7 +86,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                     borderRadius: '6px',
                     fontSize: '14px',
                     fontWeight: active ? 600 : 400,
-                    color: active ? 'var(--accent)' : 'var(--text-secondary)',
+                    color: active
+                      ? 'var(--accent)'
+                      : href === '/admin' ? '#E53935' : 'var(--text-secondary)',
                     background: active ? 'var(--accent-subtle)' : 'transparent',
                     border: active ? '1px solid var(--accent-border)' : '1px solid transparent',
                     textDecoration: 'none',
@@ -100,19 +103,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </nav>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {!isAdmin && (
-            <Link
-              href="/admin"
-              style={{
-                display: 'flex', alignItems: 'center', gap: '6px',
-                padding: '5px 12px', borderRadius: '6px', fontSize: '12px',
-                color: '#E53935', background: 'rgba(229,57,53,0.08)',
-                border: '0.5px solid rgba(229,57,53,0.2)', textDecoration: 'none',
-              }}
-            >
-              🛡️ Admin
-            </Link>
-          )}
           {isAdmin && (
             <Link
               href="/dashboard"
