@@ -19,15 +19,16 @@ export async function GET(
     const { id } = await params
     const format = request.nextUrl.searchParams.get('format') || 'txt'
 
-    // Feature gate: export_pdf for PDF format, export_txt for all other formats
+    // Feature gate per format:
+    //  - pdf      → export_pdf (Pro+)
+    //  - txt/srt/zip → export_txt (base, Starter-allowed); the ZIP just
+    //    bundles the transcript text formats, so it's a base convenience.
     if (format === 'pdf') {
-      const canExportPdf = await checkUserFeature(userId, 'export_pdf')
-      if (!canExportPdf) {
+      if (!(await checkUserFeature(userId, 'export_pdf'))) {
         return NextResponse.json(upgradeRequired('export_pdf'), { status: 403 })
       }
     } else {
-      const canExportTxt = await checkUserFeature(userId, 'export_txt')
-      if (!canExportTxt) {
+      if (!(await checkUserFeature(userId, 'export_txt'))) {
         return NextResponse.json(upgradeRequired('export_txt'), { status: 403 })
       }
     }
