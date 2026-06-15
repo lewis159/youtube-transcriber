@@ -123,13 +123,14 @@ export interface ChangelogEntry {
   borderColor: string | null
   newFeatures: string[]
   changes: string[]
+  removed: string[]
 }
 
 export const getChangelogEntries = unstable_cache(
   async (): Promise<ChangelogEntry[]> => {
     const { data, error } = await supabaseAdmin
       .from('changelog_entries')
-      .select('id, version, label, date, is_current, border_color, new_features, changes, sort_order')
+      .select('id, version, label, date, is_current, border_color, new_features, changes, removed, sort_order')
       .order('sort_order', { ascending: true })
 
     if (error) throw error
@@ -143,6 +144,7 @@ export const getChangelogEntries = unstable_cache(
       borderColor: row.border_color,
       newFeatures: row.new_features ?? [],
       changes: row.changes ?? [],
+      removed: row.removed ?? [],
     }))
   },
   ['changelog'],

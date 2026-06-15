@@ -87,6 +87,18 @@ export default function ChangelogClient({ versions }: { versions: ChangelogEntry
                   </div>
                 ))}
               </div>
+
+              {v.removed.length > 0 && (
+                <div style={{ marginTop: '16px' }}>
+                  <div style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>Removed</div>
+                  {v.removed.map((r, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '6px', alignItems: 'flex-start' }}>
+                      <span style={{ color: '#f59e0b', marginTop: '1px', flexShrink: 0 }}>−</span>
+                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{r}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
 
