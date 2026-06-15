@@ -28,7 +28,7 @@ export default async function LandingPage() {
         </div>
         <nav style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
           <a href="#features" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Features</a>
-          <a href="#pricing" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Pricing</a>
+          <a href="#pricing" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Pricing <span style={{ fontSize: '10px', color: 'var(--accent)' }}>Soon</span></a>
           <a href="/knowledge-base" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Knowledge Base</a>
           {isSignedIn ? (
             <Link href="/dashboard" className="btn-primary" style={{ padding: '8px 20px', fontSize: '14px' }}>
@@ -191,104 +191,22 @@ export default async function LandingPage() {
         padding: '100px 40px',
         background: 'linear-gradient(180deg, transparent 0%, var(--accent-subtle) 100%)',
       }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: '64px' }}>
-            <h2 style={{ fontSize: '40px', fontWeight: 800, marginBottom: '16px' }}>Simple, transparent pricing</h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '18px' }}>Start free. Upgrade when you need more.</p>
+        <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '8px',
+            background: 'rgba(229,57,53,0.08)', border: '1px solid rgba(229,57,53,0.2)',
+            borderRadius: '20px', padding: '6px 16px', marginBottom: '24px',
+            fontSize: '13px', color: 'var(--accent)', fontWeight: 600,
+          }}>
+            🚧 Coming Soon
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', alignItems: 'start' }}>
-
-            {/* Starter */}
-            <div className="glass-card" style={{ padding: '36px', display: 'flex', flexDirection: 'column', gap: '0' }}>
-              <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>Starter</div>
-              <div style={{ fontSize: '40px', fontWeight: 900, color: 'var(--accent)', margin: '12px 0 4px' }}>Free</div>
-              <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '28px' }}>Forever free</div>
-              <Link href={isSignedIn ? '/dashboard' : '/sign-up'} className="btn-secondary" style={{ textAlign: 'center', marginBottom: '28px', textDecoration: 'none' }}>
-                {isSignedIn ? 'Go to Dashboard' : 'Get started'}
-              </Link>
-              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {['5 transcriptions total', 'Transcript viewer & search', 'Download TXT', '❌ PDF export', '❌ Folders', '❌ Sharing'].map(f => (
-                  <li key={f} style={{ fontSize: '14px', color: f.startsWith('❌') ? 'var(--text-muted)' : 'var(--text-secondary)' }}>{f}</li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Pro — featured */}
-            <div style={{
-              padding: '36px',
-              borderRadius: '16px',
-              border: '1px solid var(--accent)',
-              background: 'var(--pricing-featured-bg)',
-              boxShadow: 'var(--pricing-featured-shadow)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0',
-              position: 'relative',
-            }}>
-              <div style={{
-                position: 'absolute',
-                top: '-14px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                background: 'linear-gradient(135deg, var(--accent), #ff6b6b)',
-                color: 'white',
-                padding: '4px 16px',
-                borderRadius: '20px',
-                fontSize: '11px',
-                fontWeight: 700,
-                letterSpacing: '1px',
-                whiteSpace: 'nowrap',
-              }}>
-                MOST POPULAR
-              </div>
-              <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>Pro</div>
-              <div style={{ fontSize: '40px', fontWeight: 900, color: 'var(--accent)', margin: '12px 0 4px' }}>
-                $9<span style={{ fontSize: '18px', fontWeight: 500 }}>/mo</span>
-              </div>
-              <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '28px' }}>or $90/year — save 2 months</div>
-              <Link href={isSignedIn ? '/dashboard' : '/sign-up'} className="btn-primary" style={{ textAlign: 'center', marginBottom: '28px', textDecoration: 'none' }}>
-                {isSignedIn ? 'Go to Dashboard' : 'Start free trial'}
-              </Link>
-              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {['10 transcriptions/month', 'PDF & all export formats', 'Folders & organisation', 'Share links', 'URL screenshots', '❌ AI features'].map(f => (
-                  <li key={f} style={{ fontSize: '14px', color: f.startsWith('❌') ? 'var(--text-muted)' : 'var(--text-secondary)' }}>{f}</li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Studio */}
-            <div className="glass-card" style={{ padding: '36px', display: 'flex', flexDirection: 'column', gap: '0' }}>
-              <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>Studio</div>
-              <div style={{ fontSize: '40px', fontWeight: 900, color: 'var(--accent)', margin: '12px 0 4px' }}>
-                $29<span style={{ fontSize: '18px', fontWeight: 500 }}>/mo</span>
-              </div>
-              <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '28px' }}>or $290/year — save 2 months</div>
-              <Link href={isSignedIn ? '/dashboard' : '/sign-up'} className="btn-secondary" style={{ textAlign: 'center', marginBottom: '28px', textDecoration: 'none' }}>
-                {isSignedIn ? 'Go to Dashboard' : 'Upgrade to Studio'}
-              </Link>
-              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {['Everything in Pro', 'AI chapter detection', 'Notes panel', 'Scheduled transcription', 'Organisations & teams', 'Priority support'].map(f => (
-                  <li key={f} style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{f}</li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Enterprise */}
-            <div className="glass-card" style={{ padding: '36px', display: 'flex', flexDirection: 'column', gap: '0' }}>
-              <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>Enterprise</div>
-              <div style={{ fontSize: '32px', fontWeight: 900, color: 'var(--accent)', margin: '12px 0 4px' }}>Custom</div>
-              <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '28px' }}>Contact us for pricing</div>
-              <a href="mailto:hello@yttranscriber.com" className="btn-secondary" style={{ textAlign: 'center', marginBottom: '28px', textDecoration: 'none' }}>
-                Contact Sales
-              </a>
-              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {['Everything in Studio', 'API access', 'Team seats', 'SSO / SAML', 'Dedicated support', 'Custom SLA'].map(f => (
-                  <li key={f} style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{f}</li>
-                ))}
-              </ul>
-            </div>
-
-          </div>
+          <h2 style={{ fontSize: '40px', fontWeight: 800, marginBottom: '16px' }}>Pricing is on its way</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '18px', lineHeight: 1.6 }}>
+            We&apos;re finalising our plans. Sign up now to get early access and be the first to know when paid plans launch.
+          </p>
+          <Link href={isSignedIn ? '/dashboard' : '/sign-up'} className="btn-primary" style={{ display: 'inline-block', marginTop: '32px', padding: '12px 32px', fontSize: '15px', textDecoration: 'none' }}>
+            {isSignedIn ? 'Go to Dashboard' : 'Get early access'}
+          </Link>
         </div>
       </section>
 
