@@ -38,21 +38,20 @@ const CATEGORIES: { key: Category; label: string; description: string }[] = [
 
 export default function RoadmapClient({ roadmap }: { roadmap: RoadmapItem[] }) {
   const completed   = roadmap.filter(i => i.status === 'completed').length
-  const in_progress = roadmap.filter(i => i.status === 'in_progress').length
-  const pending     = roadmap.filter(i => i.status === 'pending').length
-  const future      = roadmap.filter(i => i.status === 'future').length
   const total       = roadmap.length
 
   const [priorityFilter, setPriorityFilter] = useState<Priority | null>(null)
   const [statusFilter, setStatusFilter] = useState<Status | null>(null)
+  const [categoryFilter, setCategoryFilter] = useState<Category | null>(null)
 
-  const filterActive = priorityFilter !== null || statusFilter !== null
+  const filterActive = priorityFilter !== null || statusFilter !== null || categoryFilter !== null
   const matches = (i: RoadmapItem) =>
     (priorityFilter === null || i.priority === priorityFilter) &&
-    (statusFilter === null || i.status === statusFilter)
+    (statusFilter === null || i.status === statusFilter) &&
+    (categoryFilter === null || i.category === categoryFilter)
   const visibleCount = roadmap.filter(matches).length
 
-  const clearFilters = () => { setPriorityFilter(null); setStatusFilter(null) }
+  const clearFilters = () => { setPriorityFilter(null); setStatusFilter(null); setCategoryFilter(null) }
 
   const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 
@@ -83,48 +82,13 @@ export default function RoadmapClient({ roadmap }: { roadmap: RoadmapItem[] }) {
 
       <div style={{ padding: '24px' }}>
 
-        {/* Stat row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '24px' }}>
-          {([
-            { label: 'Completed',   status: 'completed',   count: completed,   top: '#22c55e', sub: 'shipped',       subColor: '#22c55e' },
-            { label: 'In Progress', status: 'in_progress', count: in_progress, top: '#f59e0b', sub: 'active now',    subColor: '#f59e0b' },
-            { label: 'Pending',     status: 'pending',     count: pending,     top: '#60a5fa', sub: 'queued',         subColor: '#888' },
-            { label: 'Future / v2', status: 'future',      count: future,      top: '#333',    sub: 'nice to have',   subColor: '#555' },
-          ] as const).map(({ label, status, count, top, sub, subColor }) => {
-            const active = statusFilter === status
-            return (
-              <div
-                key={label}
-                onClick={() => setStatusFilter(active ? null : status)}
-                role="button"
-                tabIndex={0}
-                style={{
-                  background: active ? 'rgba(255,255,255,0.04)' : '#0d0d0d',
-                  border: active ? `0.5px solid ${top}` : '0.5px solid #1e1e1e',
-                  borderRadius: '8px',
-                  padding: '16px',
-                  borderTop: `2px solid ${top}`,
-                  cursor: 'pointer',
-                  outline: active ? `1px solid ${top}` : 'none',
-                  transition: 'border-color 0.12s, background 0.12s',
-                }}
-                onMouseEnter={e => { if (!active) e.currentTarget.style.borderColor = '#333' }}
-                onMouseLeave={e => { if (!active) e.currentTarget.style.borderColor = '#1e1e1e' }}
-              >
-                <div style={{ fontSize: '11px', color: '#555', marginBottom: '8px' }}>{label}</div>
-                <div style={{ fontSize: '28px', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '4px' }}>{count}</div>
-                <div style={{ fontSize: '11px', color: subColor }}>{sub}</div>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Priority legend */}
+        {/* Filter bar: Priority (left) · Status (right) */}
         <div style={{
           background: '#0d0d0d', border: '0.5px solid #1e1e1e', borderRadius: '8px',
           padding: '12px 16px', marginBottom: '24px',
-          display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap',
+          display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
         }}>
+          {/* Priority chips (left) */}
           <span style={{ fontSize: '11px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginRight: '4px' }}>Priority</span>
           {(['critical', 'high', 'medium', 'low', 'nice_to_have'] as Priority[]).map(p => {
             const ps = PRIORITY_STYLE[p]
@@ -150,6 +114,36 @@ export default function RoadmapClient({ roadmap }: { roadmap: RoadmapItem[] }) {
               >
                 <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: ps.leftBorder }} />
                 <span style={{ fontSize: '12px', color: ps.color }}>{ps.label}</span>
+              </div>
+            )
+          })}
+
+          {/* Status chips (right) */}
+          <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginRight: '4px' }}>Status</span>
+          {(['completed', 'in_progress', 'pending', 'future'] as Status[]).map(s => {
+            const ss = STATUS_STYLE[s]
+            const active = statusFilter === s
+            return (
+              <div
+                key={s}
+                onClick={() => setStatusFilter(active ? null : s)}
+                role="button"
+                tabIndex={0}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '7px',
+                  cursor: 'pointer',
+                  padding: '4px 9px',
+                  borderRadius: '5px',
+                  background: active ? ss.bg : 'transparent',
+                  border: active ? `0.5px solid ${ss.border}` : '0.5px solid transparent',
+                  outline: active ? `1px solid ${ss.color}` : 'none',
+                  transition: 'background 0.12s, border-color 0.12s',
+                }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
+              >
+                <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: ss.dot }} />
+                <span style={{ fontSize: '12px', color: ss.color }}>{ss.label}</span>
               </div>
             )
           })}
@@ -183,21 +177,40 @@ export default function RoadmapClient({ roadmap }: { roadmap: RoadmapItem[] }) {
         {/* Category sections */}
         {CATEGORIES.map(({ key, label, description }) => {
           const items = roadmap.filter(i => i.category === key && matches(i))
-          if (!items.length) return null
+          const categoryActive = categoryFilter === key
+          // When a category filter is active, only the matching category renders its items.
+          const showItems = categoryFilter === null ? true : categoryActive
           return (
             <div key={key} style={{ marginBottom: '28px' }}>
 
-              {/* Section header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
+              {/* Section header (clickable category filter) */}
+              <div
+                onClick={() => setCategoryFilter(categoryActive ? null : key)}
+                role="button"
+                tabIndex={0}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  margin: '0 -8px 12px',
+                  borderRadius: '5px',
+                  background: categoryActive ? 'rgba(96,165,250,0.06)' : 'transparent',
+                  outline: categoryActive ? '1px solid #60a5fa' : 'none',
+                  transition: 'background 0.12s',
+                }}
+                onMouseEnter={e => { if (!categoryActive) e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
+                onMouseLeave={e => { if (!categoryActive) e.currentTarget.style.background = 'transparent' }}
+              >
+                <span style={{ fontSize: '11px', fontWeight: 700, color: categoryActive ? '#60a5fa' : '#555', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
                   {label}
                 </span>
-                <span style={{ fontSize: '11px', color: '#333', whiteSpace: 'nowrap' }}>— {description}</span>
+                <span style={{ fontSize: '11px', color: categoryActive ? '#60a5fa' : '#333', whiteSpace: 'nowrap' }}>— {description}</span>
                 <div style={{ flex: 1, height: '0.5px', background: '#1e1e1e' }} />
                 <span style={{ fontSize: '11px', color: '#444', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{items.length} items</span>
               </div>
 
               {/* Items */}
+              {showItems && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {items.map(item => {
                   const ps = PRIORITY_STYLE[item.priority]
@@ -259,6 +272,7 @@ export default function RoadmapClient({ roadmap }: { roadmap: RoadmapItem[] }) {
                   )
                 })}
               </div>
+              )}
             </div>
           )
         })}
