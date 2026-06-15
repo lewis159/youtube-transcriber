@@ -6,7 +6,7 @@ export default function LandingPage() {
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh', color: 'var(--text-primary)' }}>
 
       {/* ── NAV ─────────────────────────────────────── */}
-      <header style={{
+      <header className="mobile-nav" style={{
         position: 'sticky',
         top: 0,
         zIndex: 100,
@@ -18,12 +18,14 @@ export default function LandingPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '12px',
       }}>
         <div style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.5px' }}>
           <span style={{ color: 'var(--accent)' }}>YT</span>
           <span style={{ color: 'var(--text-primary)' }}> Transcriber</span>
         </div>
-        <nav style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+        <nav className="mobile-nav-items" style={{ display: 'flex', alignItems: 'center', gap: '32px', flexWrap: 'wrap' }}>
           <a href="#features" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Features</a>
           <a href="#pricing" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Pricing <span style={{ fontSize: '10px', color: 'var(--accent)' }}>Soon</span></a>
           <a href="/knowledge-base" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Knowledge Base</a>
@@ -32,7 +34,7 @@ export default function LandingPage() {
       </header>
 
       {/* ── HERO ────────────────────────────────────── */}
-      <section style={{
+      <section className="mobile-pad" style={{
         background: 'var(--hero-gradient)',
         padding: '120px 40px 100px',
         textAlign: 'center',
@@ -55,7 +57,7 @@ export default function LandingPage() {
           </div>
 
           <h1 style={{
-            fontSize: '64px',
+            fontSize: 'clamp(34px, 8vw, 64px)',
             fontWeight: 900,
             lineHeight: 1.1,
             marginBottom: '24px',
@@ -68,7 +70,7 @@ export default function LandingPage() {
           </h1>
 
           <p style={{
-            fontSize: '20px',
+            fontSize: 'clamp(16px, 4vw, 20px)',
             color: 'var(--text-secondary)',
             maxWidth: '560px',
             margin: '0 auto 48px',
@@ -83,11 +85,11 @@ export default function LandingPage() {
       </section>
 
       {/* ── HOW IT WORKS ────────────────────────────── */}
-      <section style={{ padding: '80px 40px', background: 'var(--bg-surface)' }}>
+      <section className="mobile-pad" style={{ padding: '80px 40px', background: 'var(--bg-surface)' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto', textAlign: 'center' }}>
-          <h2 style={{ fontSize: '36px', fontWeight: 800, marginBottom: '16px' }}>How it works</h2>
+          <h2 style={{ fontSize: 'clamp(28px, 6vw, 36px)', fontWeight: 800, marginBottom: '16px' }}>How it works</h2>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '56px' }}>Three steps to your transcript</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '32px' }}>
+          <div className="responsive-grid" style={{ gap: '32px' }}>
             {[
               { step: '01', title: 'Paste a URL', desc: 'Drop any YouTube link into the input box.' },
               { step: '02', title: 'We process it', desc: 'Transcript is fetched and indexed, usually in a minute or two.' },
@@ -112,15 +114,15 @@ export default function LandingPage() {
       </section>
 
       {/* ── FEATURES ────────────────────────────────── */}
-      <section id="features" style={{ padding: '100px 40px' }}>
+      <section id="features" className="mobile-pad" style={{ padding: '100px 40px' }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '64px' }}>
-            <h2 style={{ fontSize: '40px', fontWeight: 800, marginBottom: '16px' }}>Everything you need</h2>
+            <h2 style={{ fontSize: 'clamp(30px, 6vw, 40px)', fontWeight: 800, marginBottom: '16px' }}>Everything you need</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '18px' }}>
               Powerful tools for every type of creator
             </p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+          <div className="responsive-grid">
             {[
               { icon: '🎬', title: 'Fast Transcription', desc: 'Paste a YouTube URL and get a full transcript, usually in a minute or two. Supports all public videos.' },
               { icon: '🔍', title: 'Full-Text Search', desc: 'Search across all your transcripts at once. Jump to any moment in the video.' },
@@ -140,7 +142,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── PRICING ─────────────────────────────────── */}
-      <section id="pricing" style={{
+      <section id="pricing" className="mobile-pad" style={{
         padding: '100px 40px',
         background: 'linear-gradient(180deg, transparent 0%, var(--accent-subtle) 100%)',
       }}>
@@ -153,7 +155,7 @@ export default function LandingPage() {
           }}>
             🚧 Coming Soon
           </div>
-          <h2 style={{ fontSize: '40px', fontWeight: 800, marginBottom: '16px' }}>Pricing is on its way</h2>
+          <h2 style={{ fontSize: 'clamp(30px, 6vw, 40px)', fontWeight: 800, marginBottom: '16px' }}>Pricing is on its way</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '18px', lineHeight: 1.6 }}>
             We&apos;re finalising our plans. Sign up now to get early access and be the first to know when paid plans launch.
           </p>
@@ -162,12 +164,12 @@ export default function LandingPage() {
       </section>
 
       {/* ── CTA BANNER ──────────────────────────────── */}
-      <section style={{
+      <section className="mobile-pad" style={{
         padding: '80px 40px',
         textAlign: 'center',
         borderTop: '1px solid var(--accent-border)',
       }}>
-        <h2 style={{ fontSize: '40px', fontWeight: 800, marginBottom: '16px' }}>
+        <h2 style={{ fontSize: 'clamp(30px, 6vw, 40px)', fontWeight: 800, marginBottom: '16px' }}>
           Ready to get started?
         </h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '18px', marginBottom: '40px' }}>

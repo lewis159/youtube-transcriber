@@ -99,7 +99,7 @@ export default async function VideoDetailPage({ params }: { params: Promise<{ id
           </div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '24px', alignItems: 'start' }}>
+        <div className="mobile-single-col" style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '24px', alignItems: 'start' }}>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <TranscriptViewer

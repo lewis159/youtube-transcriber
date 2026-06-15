@@ -17,7 +17,7 @@ const footerLinks = [
 
 export default function SiteFooter() {
   return (
-    <footer style={{
+    <footer className="mobile-pad" style={{
       background: 'var(--bg-surface)',
       borderTop: '1px solid var(--accent-border)',
       padding: '48px 40px',

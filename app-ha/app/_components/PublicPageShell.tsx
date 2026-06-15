@@ -11,17 +11,18 @@ export default function PublicPageShell({ children }: { children: React.ReactNod
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh', color: 'var(--text-primary)' }}>
       {/* ── NAV ─────────────────────────────────────── */}
-      <header style={{
+      <header className="mobile-nav" style={{
         position: 'sticky', top: 0, zIndex: 100,
         background: 'var(--nav-bg)', borderBottom: '1px solid var(--nav-border)',
         backdropFilter: 'blur(10px)', padding: '0 40px', height: '64px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexWrap: 'wrap', gap: '12px',
       }}>
         <Link href="/" style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.5px', textDecoration: 'none' }}>
           <span style={{ color: 'var(--accent)' }}>YT</span>
           <span style={{ color: 'var(--text-primary)' }}> Transcriber</span>
         </Link>
-        <nav style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+        <nav className="mobile-nav-items" style={{ display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
           <Link href="/knowledge-base" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Knowledge Base</Link>
           <Link href="/faq" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>FAQ</Link>
           <Link href="/contact" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Contact</Link>
@@ -38,7 +39,7 @@ export default function PublicPageShell({ children }: { children: React.ReactNod
 /** Shared content-page heading + wrapper helpers. */
 export function PageWrap({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ maxWidth: '820px', margin: '0 auto', padding: '64px 40px 96px' }}>
+    <div className="mobile-pad" style={{ maxWidth: '820px', margin: '0 auto', padding: '64px 40px 96px' }}>
       {children}
     </div>
   )
@@ -52,7 +53,7 @@ export function PageTitle({ kicker, title, subtitle }: { kicker?: string; title:
           {kicker}
         </div>
       )}
-      <h1 style={{ fontSize: '44px', fontWeight: 900, lineHeight: 1.1, marginBottom: subtitle ? '16px' : 0 }}>{title}</h1>
+      <h1 style={{ fontSize: 'clamp(30px, 7vw, 44px)', fontWeight: 900, lineHeight: 1.1, marginBottom: subtitle ? '16px' : 0 }}>{title}</h1>
       {subtitle && <p style={{ fontSize: '18px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{subtitle}</p>}
     </div>
   )

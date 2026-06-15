@@ -177,7 +177,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+      <div className="mobile-stack-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
         {[
           { label: 'Total videos', value: videos.length },
           { label: 'Ready', value: videos.filter(v => v.status === 'completed').length },
@@ -221,7 +221,7 @@ export default function DashboardPage() {
             {videos.map(video => (
               <div
                 key={video.id}
-                className="glass-card"
+                className="glass-card mobile-video-row"
                 style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', gap: '20px' }}
               >
                 {/* Thumbnail */}
@@ -232,7 +232,7 @@ export default function DashboardPage() {
                 />
 
                 {/* Info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ flex: 1, minWidth: '160px' }}>
                   <Link
                     href={`/video/${video.id}`}
                     style={{
@@ -272,7 +272,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Actions */}
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
+                <div className="mobile-video-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
                   <a
                     href={`https://youtube.com/watch?v=${video.youtube_id}`}
                     target="_blank"

@@ -179,6 +179,7 @@ export default function TranscriptViewer({
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
+          flexWrap: 'wrap',
         }}>
           <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>🔍</span>
           <input
@@ -188,6 +189,7 @@ export default function TranscriptViewer({
             onChange={e => setSearch(e.target.value)}
             style={{
               flex: 1,
+              minWidth: '140px',
               background: 'transparent',
               border: 'none',
               outline: 'none',

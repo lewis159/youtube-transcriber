@@ -54,7 +54,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     }}>
 
       {/* Top nav */}
-      <header style={{
+      <header className="mobile-nav" style={{
         position: 'sticky',
         top: 0,
         zIndex: 100,
@@ -66,13 +66,15 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '12px',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '40px' }}>
+        <div className="mobile-nav-brand-group" style={{ display: 'flex', alignItems: 'center', gap: '40px', flexWrap: 'wrap' }}>
           <Link href="/" style={{ textDecoration: 'none', fontSize: '18px', fontWeight: 800 }}>
             <span style={{ color: 'var(--accent)' }}>YT</span>
             <span style={{ color: 'var(--text-primary)' }}> Transcriber</span>
           </Link>
-          <nav style={{ display: 'flex', gap: '4px' }}>
+          <nav className="mobile-nav-items" style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
             {(isAdmin ? adminItems : navItems).map(({ href, label, icon }) => {
               // For admin overview: exact match; for sub-pages: prefix match but not just /admin
               const active = href === '/admin'
@@ -126,7 +128,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       </header>
 
       {/* Page content */}
-      <main style={{ flex: 1, ...(isAdmin ? {} : { padding: '40px 32px', maxWidth: '1280px', width: '100%', margin: '0 auto' }) }}>
+      <main className={isAdmin ? undefined : 'mobile-pad'} style={{ flex: 1, ...(isAdmin ? {} : { padding: '40px 32px', maxWidth: '1280px', width: '100%', margin: '0 auto' }) }}>
         {children}
       </main>
 

@@ -228,6 +228,70 @@ body {
 }
 
 /* ============================================================
+   MOBILE RESPONSIVENESS UTILITIES (#36)
+   Targeted helpers applied to inline-styled surfaces so phones
+   (~360–414px) don't overflow. Used alongside CSS variables.
+   ============================================================ */
+
+/* Auto-fitting card grid — collapses columns as width shrinks. */
+.responsive-grid {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+@media (max-width: 640px) {
+  /* Scale down generous section padding on phones. */
+  .mobile-pad {
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+  }
+  .mobile-pad-sm {
+    padding: 24px !important;
+  }
+
+  /* Nav rows: wrap items, shrink gaps/padding. */
+  .mobile-nav {
+    padding: 0 16px !important;
+    height: auto !important;
+    min-height: 56px !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+  }
+  .mobile-nav-items {
+    flex-wrap: wrap !important;
+    gap: 8px 14px !important;
+    row-gap: 8px !important;
+  }
+  .mobile-nav-brand-group {
+    gap: 16px !important;
+    flex-wrap: wrap !important;
+  }
+
+  /* Stat / card grids stack on phones. */
+  .mobile-stack-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Video detail: player + sidebar stack. */
+  .mobile-single-col {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Dashboard video rows reflow: thumb on top, actions wrap under. */
+  .mobile-video-row {
+    flex-wrap: wrap !important;
+    gap: 14px !important;
+  }
+  .mobile-video-actions {
+    flex-wrap: wrap !important;
+    width: 100% !important;
+  }
+}
+
+/* ============================================================
    PRINT STYLES — Knowledge Base article export
    ============================================================ */
 @media print {
