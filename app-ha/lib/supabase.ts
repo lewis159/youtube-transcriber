@@ -19,11 +19,12 @@ export async function getSupabaseUserId(clerkUserId: string): Promise<string> {
   return data.id
 }
 
-// Video operations
-export async function createVideo(youtubeId: string, userId: string, title?: string, thumbnail?: string) {
-  const { data, error } = await supabase
+// Video operations — all use supabaseAdmin to bypass RLS on server
+export async function createVideo(youtubeId: string, clerkUserId: string, title?: string, thumbnail?: string) {
+  const supabaseUserId = await getSupabaseUserId(clerkUserId)
+  const { data, error } = await supabaseAdmin
     .from('videos')
-    .insert([{ youtube_id: youtubeId, user_id: userId, title, thumbnail, status: 'pending' }])
+    .insert([{ youtube_id: youtubeId, user_id: supabaseUserId, title, thumbnail, status: 'pending' }])
     .select()
     .single()
 
@@ -32,9 +33,9 @@ export async function createVideo(youtubeId: string, userId: string, title?: str
 }
 
 export async function updateVideoStatus(videoId: string, status: string) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('videos')
-    .update({ status, updated_at: new Date().toISOString() })
+    .update({ status })
     .eq('id', videoId)
     .select()
     .single()
@@ -44,7 +45,7 @@ export async function updateVideoStatus(videoId: string, status: string) {
 }
 
 export async function getVideoById(videoId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('videos')
     .select('*')
     .eq('id', videoId)
@@ -54,11 +55,12 @@ export async function getVideoById(videoId: string) {
   return data
 }
 
-export async function listVideos(userId: string, limit: number = 10) {
-  const { data, error } = await supabase
+export async function listVideos(clerkUserId: string, limit: number = 10) {
+  const supabaseUserId = await getSupabaseUserId(clerkUserId)
+  const { data, error } = await supabaseAdmin
     .from('videos')
     .select('*')
-    .eq('user_id', userId)
+    .eq('user_id', supabaseUserId)
     .order('created_at', { ascending: false })
     .limit(limit)
 
@@ -66,12 +68,13 @@ export async function listVideos(userId: string, limit: number = 10) {
   return data
 }
 
-export async function getVideoByIdAndUser(videoId: string, userId: string) {
-  const { data, error } = await supabase
+export async function getVideoByIdAndUser(videoId: string, clerkUserId: string) {
+  const supabaseUserId = await getSupabaseUserId(clerkUserId)
+  const { data, error } = await supabaseAdmin
     .from('videos')
     .select('*')
     .eq('id', videoId)
-    .eq('user_id', userId)
+    .eq('user_id', supabaseUserId)
     .single()
 
   if (error) throw error
@@ -79,33 +82,24 @@ export async function getVideoByIdAndUser(videoId: string, userId: string) {
 }
 
 export async function deleteVideo(videoId: string) {
-  const { error } = await supabase.from('videos').delete().eq('id', videoId)
+  const { error } = await supabaseAdmin.from('videos').delete().eq('id', videoId)
   if (error) throw error
 }
 
 // Transcript operations
 export async function saveTranscript(videoId: string, transcript: any[], language: string = 'en') {
-  const fullText = transcript.map((item) => item.text).join(' ')
-
-  const { data: transcriptData, error: transcriptError } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('transcripts')
     .insert([{ video_id: videoId, content: transcript, language }])
     .select()
     .single()
 
-  if (transcriptError) throw transcriptError
-
-  const { error: textError } = await supabase
-    .from('video_transcript_text')
-    .insert([{ video_id: videoId, text_content: fullText }])
-
-  if (textError) throw textError
-
-  return transcriptData
+  if (error) throw error
+  return data
 }
 
 export async function getVideoTranscript(videoId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('transcripts')
     .select('*')
     .eq('video_id', videoId)

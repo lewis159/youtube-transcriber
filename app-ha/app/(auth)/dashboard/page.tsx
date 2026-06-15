@@ -51,7 +51,7 @@ export default function DashboardPage() {
       const res = await fetch('/api/videos/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ youtubeUrl: url }),
       })
       if (!res.ok) throw new Error('Upload failed')
       setUrl('')
