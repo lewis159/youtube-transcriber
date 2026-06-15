@@ -73,31 +73,11 @@ export default function LandingPage() {
             margin: '0 auto 48px',
             lineHeight: 1.6,
           }}>
-            Paste a YouTube link. Get a fully searchable transcript in seconds.
-            Export, organize, and share — built for creators who demand more.
+            Paste a YouTube link. Get a fully searchable transcript, usually in
+            a minute or two. Export, organize, and share — built for creators who demand more.
           </p>
 
           <HeroCTA />
-
-          {/* Social proof */}
-          <div style={{
-            marginTop: '64px',
-            display: 'flex',
-            justifyContent: 'center',
-            gap: '48px',
-            flexWrap: 'wrap',
-          }}>
-            {[
-              { value: '10K+', label: 'Transcripts created' },
-              { value: '< 5s', label: 'Average processing' },
-              { value: '99.9%', label: 'Uptime' },
-            ].map(({ value, label }) => (
-              <div key={label} style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--accent)' }}>{value}</div>
-                <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>{label}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -109,7 +89,7 @@ export default function LandingPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '32px' }}>
             {[
               { step: '01', title: 'Paste a URL', desc: 'Drop any YouTube link into the input box.' },
-              { step: '02', title: 'We process it', desc: 'Transcript is fetched and indexed in seconds.' },
+              { step: '02', title: 'We process it', desc: 'Transcript is fetched and indexed, usually in a minute or two.' },
               { step: '03', title: 'Search & export', desc: 'Full-text search, PDF, TXT, SRT — whatever you need.' },
             ].map(({ step, title, desc }) => (
               <div key={step} style={{
@@ -141,7 +121,7 @@ export default function LandingPage() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
             {[
-              { icon: '🎬', title: 'Instant Transcription', desc: 'Paste a YouTube URL and get a full transcript in under 5 seconds. Supports all public videos.' },
+              { icon: '🎬', title: 'Fast Transcription', desc: 'Paste a YouTube URL and get a full transcript, usually in a minute or two. Supports all public videos.' },
               { icon: '🔍', title: 'Full-Text Search', desc: 'Search across all your transcripts at once. Jump to any moment in the video.' },
               { icon: '📄', title: 'Multiple Export Formats', desc: 'Download as TXT, PDF, SRT, or ZIP bundle. Use your transcript anywhere.' },
               { icon: '🗂️', title: 'Folders & Organisation', desc: 'Organise transcripts into folders by project, client, or topic. Stay tidy.' },
@@ -190,7 +170,7 @@ export default function LandingPage() {
           Ready to get started?
         </h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '18px', marginBottom: '40px' }}>
-          No credit card required. Your first 3 transcriptions are free.
+          No credit card required. Your first 5 transcriptions are free.
         </p>
         <FinalCTA />
       </section>
