@@ -1,7 +1,7 @@
-'use client'
-
-import { useUser } from '@clerk/nextjs'
+import { auth } from '@clerk/nextjs/server'
 import Link from 'next/link'
+import { getSupabaseUserId, supabaseAdmin } from '@/lib/supabase'
+import DeleteAccountButton from './DeleteAccountButton'
 
 const TIER_INFO = {
   starter: {
@@ -34,15 +34,50 @@ const TIER_INFO = {
   },
 }
 
-export default function SettingsPage() {
-  const { user, isLoaded } = useUser()
+type TierKey = keyof typeof TIER_INFO
 
-  const currentTier = 'starter' as keyof typeof TIER_INFO
-  const tierInfo = TIER_INFO[currentTier]
+const VALID_TIERS = new Set<string>(Object.keys(TIER_INFO))
 
-  if (!isLoaded) {
-    return <div style={{ padding: '80px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
+function toTierKey(value: string | null | undefined): TierKey {
+  if (value && VALID_TIERS.has(value)) return value as TierKey
+  return 'starter'
+}
+
+export default async function SettingsPage() {
+  const { userId } = await auth()
+
+  let currentTier: TierKey = 'starter'
+  let dbEmail: string | null = null
+  let memberSince: string | null = null
+  let clerkImageUrl: string | null = null
+  let clerkFullName: string | null = null
+  let clerkEmail: string | null = null
+
+  if (userId) {
+    try {
+      const supabaseUserId = await getSupabaseUserId(userId)
+      const { data: dbUser } = await supabaseAdmin
+        .from('users')
+        .select('tier, email, created_at')
+        .eq('id', supabaseUserId)
+        .single()
+
+      currentTier = toTierKey(dbUser?.tier)
+      dbEmail = dbUser?.email ?? null
+      if (dbUser?.created_at) {
+        memberSince = new Date(dbUser.created_at).toLocaleDateString('en-GB', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
+      }
+    } catch {
+      // If lookup fails, fall back to defaults already set above
+    }
   }
+
+  const tierInfo = TIER_INFO[currentTier]
+  const displayEmail = dbEmail ?? clerkEmail ?? '—'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', maxWidth: '760px' }}>
@@ -63,18 +98,15 @@ export default function SettingsPage() {
           Profile
         </h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '24px' }}>
-          {user?.imageUrl && (
-            <img
-              src={user.imageUrl}
-              alt={user.fullName ?? 'Avatar'}
-              style={{ width: '64px', height: '64px', borderRadius: '50%', border: '2px solid var(--accent-border)' }}
-            />
-          )}
           <div>
-            <div style={{ fontSize: '18px', fontWeight: 700 }}>{user?.fullName ?? '—'}</div>
             <div style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '4px' }}>
-              {user?.primaryEmailAddress?.emailAddress ?? '—'}
+              {displayEmail}
             </div>
+            {memberSince && (
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                Member since {memberSince}
+              </div>
+            )}
           </div>
         </div>
         <div style={{
@@ -124,7 +156,7 @@ export default function SettingsPage() {
           </div>
           {tierInfo.next && (
             <Link href="/#pricing" className="btn-primary" style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}>
-              Upgrade to {TIER_INFO[tierInfo.next as keyof typeof TIER_INFO].name}
+              Upgrade to {TIER_INFO[tierInfo.next as TierKey].name}
             </Link>
           )}
         </div>
@@ -171,8 +203,14 @@ export default function SettingsPage() {
           fontSize: '14px',
         }}>
           <div style={{ fontSize: '24px', marginBottom: '8px' }}>💳</div>
-          <p>You&apos;re on the free plan — no billing information required.</p>
-          <p style={{ marginTop: '6px', fontSize: '13px' }}>Upgrade anytime to unlock premium features.</p>
+          {currentTier === 'starter' ? (
+            <>
+              <p>You&apos;re on the free plan — no billing information required.</p>
+              <p style={{ marginTop: '6px', fontSize: '13px' }}>Upgrade anytime to unlock premium features.</p>
+            </>
+          ) : (
+            <p>You&apos;re on the <strong>{tierInfo.name}</strong> plan.</p>
+          )}
           <Link href="/#pricing" className="btn-secondary" style={{ display: 'inline-block', marginTop: '16px', textDecoration: 'none', fontSize: '13px' }}>
             View pricing
           </Link>
@@ -196,21 +234,7 @@ export default function SettingsPage() {
               Permanently delete your account and all transcripts. This cannot be undone.
             </div>
           </div>
-          <button
-            onClick={() => alert('Account deletion coming soon. Contact support@yttranscriber.com.')}
-            style={{
-              padding: '10px 20px',
-              borderRadius: '6px',
-              background: 'transparent',
-              border: '1px solid rgba(229,57,53,0.4)',
-              color: 'var(--accent)',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Delete account
-          </button>
+          <DeleteAccountButton />
         </div>
       </section>
 

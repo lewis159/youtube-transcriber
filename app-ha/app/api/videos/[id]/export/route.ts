@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { getVideoByIdAndUser, getVideoTranscript } from '@/lib/supabase'
-import { generateTXT, generateSRT, generatePDF, generateZIP } from '@/lib/export'
+import { generateTXT, generateSRT, generateZIP } from '@/lib/export'
 import { checkUserFeature, upgradeRequired } from '@/lib/feature-flags'
 
 export async function GET(
@@ -32,22 +32,38 @@ export async function GET(
       }
     }
 
-    const video = await getVideoByIdAndUser(id, userId)
+    // Verify ownership — throws if video not found or belongs to another user
+    let video: { youtube_id: string; title?: string }
+    try {
+      video = await getVideoByIdAndUser(id, userId)
+    } catch {
+      return NextResponse.json({ error: 'Video not found' }, { status: 404 })
+    }
+
+    if (!video) {
+      return NextResponse.json({ error: 'Video not found' }, { status: 404 })
+    }
+
+    // PDF is not yet implemented server-side
+    if (format === 'pdf') {
+      return NextResponse.json({ error: 'pdf_not_implemented' }, { status: 501 })
+    }
+
     const transcript = await getVideoTranscript(id)
 
     if (!transcript) {
       return NextResponse.json({ error: 'Transcript not found' }, { status: 404 })
     }
 
-    const segments = transcript.content as any[]
+    const segments = transcript.content as Array<{ text: string; start: number; duration: number }>
 
     switch (format) {
       case 'txt': {
         const txt = generateTXT(segments)
         return new NextResponse(txt, {
           headers: {
-            'Content-Type': 'text/plain',
-            'Content-Disposition': `attachment; filename="${video.youtube_id}.txt"`,
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Content-Disposition': `attachment; filename="transcript.txt"`,
           },
         })
       }
@@ -56,19 +72,8 @@ export async function GET(
         const srt = generateSRT(segments)
         return new NextResponse(srt, {
           headers: {
-            'Content-Type': 'application/x-subrip',
-            'Content-Disposition': `attachment; filename="${video.youtube_id}.srt"`,
-          },
-        })
-      }
-
-      case 'pdf': {
-        const pdf = generatePDF(segments, video.title || video.youtube_id)
-        const pdfBuffer = Buffer.from(pdf.output('arraybuffer'))
-        return new NextResponse(pdfBuffer, {
-          headers: {
-            'Content-Type': 'application/pdf',
-            'Content-Disposition': `attachment; filename="${video.youtube_id}.pdf"`,
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Content-Disposition': `attachment; filename="transcript.srt"`,
           },
         })
       }

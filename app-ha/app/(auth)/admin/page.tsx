@@ -1,18 +1,44 @@
-export default function AdminOverviewPage() {
+import { supabaseAdmin } from '@/lib/supabase'
+
+export default async function AdminOverviewPage() {
+  // ── Fetch real stats from Supabase ──────────────────────────────────────────
+  const [
+    { count: totalUsers },
+    { count: totalVideos },
+    { data: videoRows },
+    { data: recentUsersRaw },
+  ] = await Promise.all([
+    supabaseAdmin.from('users').select('*', { count: 'exact', head: true }),
+    supabaseAdmin.from('videos').select('*', { count: 'exact', head: true }),
+    supabaseAdmin.from('videos').select('status'),
+    supabaseAdmin
+      .from('users')
+      .select('id, email, tier, role, created_at')
+      .order('created_at', { ascending: false })
+      .limit(5),
+  ])
+
+  const doneCount   = videoRows?.filter(v => v.status === 'done' || v.status === 'completed').length ?? 0
+  const successRate = totalVideos && totalVideos > 0 ? Math.round((doneCount / totalVideos) * 100) : 0
+
+  const fmtNum = (n: number | null) =>
+    n == null ? '—' : n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(n)
+
   const stats = [
-    { label: 'Total Users',     value: '1,234', sub: '+24 this week',    color: '#E53935', subColor: '#22c55e' },
-    { label: 'Organisations',   value: '89',    sub: '12 Enterprise',     color: '#22c55e', subColor: '#888' },
-    { label: 'Total Videos',    value: '5,643', sub: '+182 this week',   color: '#60a5fa', subColor: '#22c55e' },
-    { label: 'Transcripts Done',value: '5,420', sub: '96% success rate', color: '#a78bfa', subColor: '#888' },
+    { label: 'Total Users',      value: fmtNum(totalUsers),   sub: 'All registered accounts', color: '#E53935', subColor: '#888' },
+    { label: 'Organisations',    value: '—',                   sub: 'Org data coming soon',    color: '#22c55e', subColor: '#888' },
+    { label: 'Total Videos',     value: fmtNum(totalVideos),  sub: 'All submitted videos',    color: '#60a5fa', subColor: '#22c55e' },
+    { label: 'Transcripts Done', value: fmtNum(doneCount),    sub: `${successRate}% success rate`, color: '#a78bfa', subColor: '#888' },
   ]
 
-  const recentUsers = [
-    { name: 'Ben Percival',   email: 'ben@example.com',   tier: 'Studio',     status: 'Active',    joined: '01 Jan 2026', role: 'global_admin' },
-    { name: 'Sarah Mitchell', email: 'sarah@example.com', tier: 'Pro',        status: 'Active',    joined: '15 Feb 2026', role: 'org_admin' },
-    { name: 'James Walker',   email: 'james@example.com', tier: 'Starter',    status: 'Trial',     joined: '10 Jun 2026', role: 'user' },
-    { name: 'Emma Davis',     email: 'emma@example.com',  tier: 'Enterprise', status: 'Active',    joined: '03 Mar 2026', role: 'user' },
-    { name: 'Tom Hughes',     email: 'tom@example.com',   tier: 'Pro',        status: 'Trial',     joined: '11 Jun 2026', role: 'user' },
-  ]
+  const recentUsers = (recentUsersRaw ?? []).map(u => ({
+    name:    u.email?.split('@')[0] ?? 'Unknown',
+    email:   u.email ?? '',
+    tier:    u.tier   ?? 'Starter',
+    status:  'Active',
+    joined:  new Date(u.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+    role:    u.role   ?? 'user',
+  }))
 
   const activity = [
     { icon: '👤', text: 'James Walker signed up — Starter trial started',   time: '2 min ago',   color: '#22c55e' },
