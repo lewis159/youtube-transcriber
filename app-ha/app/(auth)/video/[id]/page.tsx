@@ -1,134 +1,43 @@
-'use client'
-
-import { useState, useEffect, use } from 'react'
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { getVideoByIdAndUser, getVideoTranscript } from '@/lib/supabase'
+import TranscriptViewer from './TranscriptViewer'
 
-interface TranscriptSegment {
-  text: string
-  start: number
-  duration: number
-}
+export default async function VideoDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const { userId } = await auth()
+  if (!userId) redirect('/sign-in')
 
-interface VideoDetail {
-  id: string
-  title: string
-  youtube_id: string
-  status: string
-  created_at: string
-  thumbnail?: string
-}
-
-interface TranscriptData {
-  content: TranscriptSegment[]
-  language?: string
-}
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
-
-export default function VideoDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
-
-  const [video, setVideo] = useState<VideoDetail | null>(null)
-  const [transcript, setTranscript] = useState<TranscriptData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [exportingFmt, setExportingFmt] = useState<string | null>(null)
-  const [note, setNote] = useState('')
-  const [noteSaved, setNoteSaved] = useState(false)
-
-  useEffect(() => {
-    async function load() {
-      try {
-        const [vRes, tRes] = await Promise.all([
-          fetch(`/api/videos/${id}`),
-          fetch(`/api/videos/${id}/transcript`),
-        ])
-        if (vRes.ok) setVideo(await vRes.json())
-        if (tRes.ok) setTranscript(await tRes.json())
-      } catch (e) {
-        console.error(e)
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [id])
-
-  async function handleExport(format: 'txt' | 'srt' | 'pdf' | 'zip') {
-    try {
-      setExportingFmt(format)
-      const res = await fetch(`/api/videos/${id}/export?format=${format}`)
-      if (res.status === 403) {
-        alert('PDF export requires Pro plan or above. Upgrade to unlock.')
-        return
-      }
-      if (!res.ok) throw new Error('Export failed')
-      const blob = await res.blob()
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `transcript.${format === 'zip' ? 'zip' : format}`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-    } catch (e) {
-      console.error(e)
-      alert('Export failed.')
-    } finally {
-      setExportingFmt(null)
-    }
+  let video: any
+  try {
+    video = await getVideoByIdAndUser(id, userId)
+  } catch {
+    redirect('/dashboard')
   }
 
-  async function saveNote() {
+  if (!video) redirect('/dashboard')
+
+  let transcript: { content: { text: string; start: number; duration: number }[]; language?: string } | null = null
+  if (video.status === 'completed') {
     try {
-      await fetch(`/api/videos/${id}/notes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body: note }),
-      })
-      setNoteSaved(true)
-      setTimeout(() => setNoteSaved(false), 2000)
-    } catch (e) {
-      console.error(e)
+      transcript = await getVideoTranscript(id)
+    } catch {
+      transcript = null
     }
   }
 
   const segments = transcript?.content ?? []
-  const filtered = search
-    ? segments.filter(s => s.text.toLowerCase().includes(search.toLowerCase()))
-    : segments
-
-  if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: '80px', color: 'var(--text-muted)' }}>
-        Loading transcript…
-      </div>
-    )
-  }
-
-  if (!video) {
-    return (
-      <div style={{ textAlign: 'center', padding: '80px' }}>
-        <p style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>Video not found.</p>
-        <Link href="/dashboard" className="btn-secondary" style={{ textDecoration: 'none' }}>← Back to dashboard</Link>
-      </div>
-    )
-  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
 
-      {/* Breadcrumb */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
-        <Link href="/dashboard" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Dashboard</Link>
+        <Link href="/dashboard" style={{ color: '#E53935', textDecoration: 'none' }}>Dashboard</Link>
         <span>/</span>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{video.title}</span>
       </div>
 
-      {/* Video header */}
       <div style={{
         background: 'var(--bg-card)',
         border: '1px solid var(--border-default)',
@@ -151,8 +60,6 @@ export default function VideoDetailPage({ params }: { params: Promise<{ id: stri
             {transcript?.language && ` · Language: ${transcript.language.toUpperCase()}`}
             {segments.length > 0 && ` · ${segments.length} segments`}
           </p>
-
-          {/* Export buttons */}
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <a
               href={`https://youtube.com/watch?v=${video.youtube_id}`}
@@ -170,171 +77,74 @@ export default function VideoDetailPage({ params }: { params: Promise<{ id: stri
             >
               ▶ Watch on YouTube
             </a>
-            {([
-              { fmt: 'txt', label: '.txt' },
-              { fmt: 'srt', label: '.srt' },
-              { fmt: 'pdf', label: 'PDF ✦' },
-              { fmt: 'zip', label: 'All (ZIP)' },
-            ] as const).map(({ fmt, label }) => (
-              <button
-                key={fmt}
-                onClick={() => handleExport(fmt)}
-                disabled={video.status !== 'completed' || !!exportingFmt}
-                className="btn-secondary"
-                style={{
-                  padding: '8px 16px',
-                  fontSize: '13px',
-                  opacity: video.status !== 'completed' ? 0.4 : 1,
-                }}
-                title={fmt === 'pdf' ? 'Pro plan required' : undefined}
-              >
-                {exportingFmt === fmt ? 'Exporting…' : `↓ ${label}`}
-              </button>
-            ))}
           </div>
         </div>
       </div>
 
-      {/* Main 2-col layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'start' }}>
-
-        {/* Transcript panel */}
+      {video.status !== 'completed' ? (
         <div style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border-default)',
           borderRadius: '12px',
-          overflow: 'hidden',
+          padding: '60px',
+          textAlign: 'center',
+          color: 'var(--text-muted)',
         }}>
-          {/* Search bar */}
+          <div style={{ fontSize: '32px', marginBottom: '16px' }}>⏳</div>
+          <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)' }}>
+            Processing…
+          </div>
+          <div style={{ fontSize: '13px' }}>
+            Your transcript is being generated. Check back in a moment.
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '24px', alignItems: 'start' }}>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-default)',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              aspectRatio: '16/9',
+            }}>
+              <iframe
+                width="100%"
+                height="100%"
+                src={`https://www.youtube.com/embed/${video.youtube_id}`}
+                title={video.title}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                style={{ border: 'none', display: 'block' }}
+              />
+            </div>
+
+            <TranscriptViewer segments={segments} youtubeId={video.youtube_id} />
+          </div>
+
           <div style={{
-            padding: '16px 20px',
-            borderBottom: '1px solid var(--border-subtle)',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-default)',
+            borderRadius: '12px',
+            padding: '20px',
             display: 'flex',
-            alignItems: 'center',
+            flexDirection: 'column',
             gap: '12px',
           }}>
-            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>🔍</span>
-            <input
-              type="text"
-              placeholder="Search transcript…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{
-                flex: 1,
-                background: 'transparent',
-                border: 'none',
-                outline: 'none',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-            {search && (
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                {filtered.length} results
-              </span>
-            )}
+            <div style={{ fontSize: '15px', fontWeight: 700 }}>Video Info</div>
+            <div style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div><span style={{ color: 'var(--text-secondary)' }}>Status:</span> {video.status}</div>
+              <div><span style={{ color: 'var(--text-secondary)' }}>Segments:</span> {segments.length}</div>
+              {transcript?.language && (
+                <div><span style={{ color: 'var(--text-secondary)' }}>Language:</span> {transcript.language.toUpperCase()}</div>
+              )}
+              <div><span style={{ color: 'var(--text-secondary)' }}>Added:</span> {new Date(video.created_at).toLocaleDateString()}</div>
+            </div>
           </div>
 
-          {/* Segments */}
-          <div style={{ maxHeight: '560px', overflowY: 'auto', padding: '8px' }}>
-            {segments.length === 0 ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                {video.status === 'completed' ? 'No transcript data found.' : 'Transcript is still processing…'}
-              </div>
-            ) : filtered.length === 0 ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                No results for &ldquo;{search}&rdquo;
-              </div>
-            ) : (
-              filtered.map((seg, i) => (
-                <a
-                  key={i}
-                  href={`https://youtube.com/watch?v=${video.youtube_id}&t=${Math.floor(seg.start)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: 'flex',
-                    gap: '12px',
-                    padding: '10px 12px',
-                    borderRadius: '6px',
-                    textDecoration: 'none',
-                    transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-card-hover)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <span style={{
-                    fontSize: '11px',
-                    color: 'var(--accent)',
-                    fontFamily: 'monospace',
-                    flexShrink: 0,
-                    marginTop: '2px',
-                    minWidth: '36px',
-                  }}>
-                    {formatTime(seg.start)}
-                  </span>
-                  <span style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    {search ? highlightMatch(seg.text, search) : seg.text}
-                  </span>
-                </a>
-              ))
-            )}
-          </div>
         </div>
-
-        {/* Notes panel */}
-        <div style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border-default)',
-          borderRadius: '12px',
-          padding: '20px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
-        }}>
-          <div style={{ fontSize: '15px', fontWeight: 700 }}>Notes</div>
-          <textarea
-            placeholder="Add your notes about this video…"
-            value={note}
-            onChange={e => setNote(e.target.value)}
-            rows={10}
-            style={{
-              background: 'var(--bg-elevated)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '6px',
-              padding: '12px',
-              color: 'var(--text-primary)',
-              fontSize: '13px',
-              resize: 'vertical',
-              lineHeight: 1.6,
-              outline: 'none',
-              width: '100%',
-            }}
-          />
-          <button
-            onClick={saveNote}
-            className="btn-primary"
-            style={{ fontSize: '13px', padding: '10px 16px' }}
-          >
-            {noteSaved ? '✓ Saved' : 'Save notes'}
-          </button>
-        </div>
-
-      </div>
+      )}
     </div>
-  )
-}
-
-function highlightMatch(text: string, query: string) {
-  const idx = text.toLowerCase().indexOf(query.toLowerCase())
-  if (idx === -1) return text
-  return (
-    <>
-      {text.slice(0, idx)}
-      <mark style={{ background: 'var(--accent)', color: 'white', borderRadius: '2px', padding: '0 2px' }}>
-        {text.slice(idx, idx + query.length)}
-      </mark>
-      {text.slice(idx + query.length)}
-    </>
   )
 }
