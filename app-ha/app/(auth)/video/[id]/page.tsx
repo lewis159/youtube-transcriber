@@ -102,25 +102,12 @@ export default async function VideoDetailPage({ params }: { params: Promise<{ id
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '24px', alignItems: 'start' }}>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-default)',
-              borderRadius: '12px',
-              overflow: 'hidden',
-              aspectRatio: '16/9',
-            }}>
-              <iframe
-                width="100%"
-                height="100%"
-                src={`https://www.youtube.com/embed/${video.youtube_id}`}
-                title={video.title}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                style={{ border: 'none', display: 'block' }}
-              />
-            </div>
-
-            <TranscriptViewer segments={segments} youtubeId={video.youtube_id} />
+            <TranscriptViewer
+              segments={segments}
+              youtubeId={video.youtube_id}
+              videoId={id}
+              title={video.title}
+            />
           </div>
 
           <div style={{
