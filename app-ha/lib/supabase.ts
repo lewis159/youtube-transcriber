@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { unstable_cache } from 'next/cache'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder'
@@ -108,6 +109,78 @@ export async function getVideoTranscript(videoId: string) {
   if (error) throw error
   return data
 }
+
+// ── Changelog + Roadmap content (DB-backed, cached) ──────────────────────────
+// Both read server-side via supabaseAdmin (service role → bypasses RLS).
+// Returned objects are plain serialisable shapes matching what the pages render.
+
+export interface ChangelogEntry {
+  id: string
+  version: string
+  label: string | null
+  date: string | null
+  isCurrent: boolean
+  borderColor: string | null
+  newFeatures: string[]
+  changes: string[]
+}
+
+export const getChangelogEntries = unstable_cache(
+  async (): Promise<ChangelogEntry[]> => {
+    const { data, error } = await supabaseAdmin
+      .from('changelog_entries')
+      .select('id, version, label, date, is_current, border_color, new_features, changes, sort_order')
+      .order('sort_order', { ascending: true })
+
+    if (error) throw error
+
+    return (data ?? []).map((row) => ({
+      id: row.id,
+      version: row.version,
+      label: row.label,
+      date: row.date,
+      isCurrent: row.is_current,
+      borderColor: row.border_color,
+      newFeatures: row.new_features ?? [],
+      changes: row.changes ?? [],
+    }))
+  },
+  ['changelog'],
+  { revalidate: 30, tags: ['changelog'] }
+)
+
+export interface RoadmapItem {
+  id: number
+  title: string
+  description: string
+  status: string
+  priority: string
+  category: string
+  updatedAt: string
+}
+
+export const getRoadmapItems = unstable_cache(
+  async (): Promise<RoadmapItem[]> => {
+    const { data, error } = await supabaseAdmin
+      .from('roadmap_items')
+      .select('item_key, title, description, status, priority, category, updated_at, sort_order')
+      .order('sort_order', { ascending: true })
+
+    if (error) throw error
+
+    return (data ?? []).map((row) => ({
+      id: row.item_key,
+      title: row.title,
+      description: row.description ?? '',
+      status: row.status,
+      priority: row.priority,
+      category: row.category,
+      updatedAt: row.updated_at ?? '',
+    }))
+  },
+  ['roadmap'],
+  { revalidate: 30, tags: ['roadmap'] }
+)
 
 export async function testDatabaseConnection(): Promise<boolean> {
   // Skip test during build if credentials not set
