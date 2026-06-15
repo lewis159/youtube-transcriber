@@ -1,4 +1,5 @@
 import { NavCTA, HeroCTA, PricingCTA, FinalCTA } from './LandingCTA'
+import SiteFooter from './_components/SiteFooter'
 
 export default function LandingPage() {
   return (
@@ -176,42 +177,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── FOOTER ──────────────────────────────────── */}
-      <footer style={{
-        background: 'var(--bg-surface)',
-        borderTop: '1px solid var(--accent-border)',
-        padding: '48px 40px',
-      }}>
-        <div style={{
-          maxWidth: '1200px',
-          margin: '0 auto',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '24px',
-        }}>
-          <div style={{ fontSize: '18px', fontWeight: 800 }}>
-            <span style={{ color: 'var(--accent)' }}>YT</span> Transcriber
-          </div>
-          <div style={{ display: 'flex', gap: '32px', flexWrap: 'wrap' }}>
-            {[
-              { label: 'Features', href: '#features' },
-              { label: 'Pricing', href: '#pricing' },
-              { label: 'Knowledge Base', href: '/knowledge-base' },
-              { label: 'About', href: '/about' },
-              { label: 'FAQ', href: '/faq' },
-              { label: 'Contact', href: '/contact' },
-              { label: 'Privacy', href: '/privacy' },
-              { label: 'Terms', href: '/terms' },
-            ].map(({ label, href }) => (
-              <a key={label} href={href} style={{ fontSize: '14px', color: 'var(--text-muted)', textDecoration: 'none' }}>{label}</a>
-            ))}
-          </div>
-          <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-            &copy; 2026 YT Transcriber. Built for creators.
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
 
     </div>
   )

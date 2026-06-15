@@ -1,21 +1,11 @@
 import Link from 'next/link'
+import SiteFooter from './SiteFooter'
 
 /**
  * Shared header + footer chrome for the public marketing pages
  * (privacy, terms, contact, faq, about). Server component — matches
  * the landing page dark theme and CSS-variable language.
  */
-
-const footerLinks = [
-  { label: 'Features', href: '/#features' },
-  { label: 'Pricing', href: '/#pricing' },
-  { label: 'Knowledge Base', href: '/knowledge-base' },
-  { label: 'About', href: '/about' },
-  { label: 'FAQ', href: '/faq' },
-  { label: 'Contact', href: '/contact' },
-  { label: 'Privacy', href: '/privacy' },
-  { label: 'Terms', href: '/terms' },
-]
 
 export default function PublicPageShell({ children }: { children: React.ReactNode }) {
   return (
@@ -40,30 +30,7 @@ export default function PublicPageShell({ children }: { children: React.ReactNod
 
       <main>{children}</main>
 
-      {/* ── FOOTER ──────────────────────────────────── */}
-      <footer style={{
-        background: 'var(--bg-surface)',
-        borderTop: '1px solid var(--accent-border)',
-        padding: '48px 40px',
-      }}>
-        <div style={{
-          maxWidth: '1200px', margin: '0 auto',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          flexWrap: 'wrap', gap: '24px',
-        }}>
-          <Link href="/" style={{ fontSize: '18px', fontWeight: 800, textDecoration: 'none', color: 'var(--text-primary)' }}>
-            <span style={{ color: 'var(--accent)' }}>YT</span> Transcriber
-          </Link>
-          <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-            {footerLinks.map(({ label, href }) => (
-              <Link key={label} href={href} style={{ fontSize: '14px', color: 'var(--text-muted)', textDecoration: 'none' }}>{label}</Link>
-            ))}
-          </div>
-          <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-            &copy; 2026 YT Transcriber. Built for creators.
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

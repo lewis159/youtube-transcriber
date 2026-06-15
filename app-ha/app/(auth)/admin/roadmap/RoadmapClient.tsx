@@ -118,6 +118,35 @@ export default function RoadmapClient({ roadmap }: { roadmap: RoadmapItem[] }) {
             )
           })}
 
+          {/* Category chips (middle) */}
+          <span style={{ fontSize: '11px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginLeft: '8px', marginRight: '4px' }}>Category</span>
+          {CATEGORIES.map(({ key, label }) => {
+            const active = categoryFilter === key
+            return (
+              <div
+                key={key}
+                onClick={() => setCategoryFilter(active ? null : key)}
+                role="button"
+                tabIndex={0}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '7px',
+                  cursor: 'pointer',
+                  padding: '4px 9px',
+                  borderRadius: '5px',
+                  background: active ? 'rgba(96,165,250,0.06)' : 'transparent',
+                  border: active ? '0.5px solid rgba(96,165,250,0.2)' : '0.5px solid transparent',
+                  outline: active ? '1px solid #60a5fa' : 'none',
+                  transition: 'background 0.12s, border-color 0.12s',
+                }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
+              >
+                <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: active ? '#60a5fa' : '#444' }} />
+                <span style={{ fontSize: '12px', color: active ? '#60a5fa' : '#888' }}>{label}</span>
+              </div>
+            )
+          })}
+
           {/* Status chips (right) */}
           <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginRight: '4px' }}>Status</span>
           {(['completed', 'in_progress', 'pending', 'future'] as Status[]).map(s => {
@@ -177,40 +206,28 @@ export default function RoadmapClient({ roadmap }: { roadmap: RoadmapItem[] }) {
         {/* Category sections */}
         {CATEGORIES.map(({ key, label, description }) => {
           const items = roadmap.filter(i => i.category === key && matches(i))
-          const categoryActive = categoryFilter === key
-          // When a category filter is active, only the matching category renders its items.
-          const showItems = categoryFilter === null ? true : categoryActive
+          // Hide a section entirely if it has no items under the active filters.
+          if (items.length === 0) return null
           return (
             <div key={key} style={{ marginBottom: '28px' }}>
 
-              {/* Section header (clickable category filter) */}
+              {/* Section header (plain label) */}
               <div
-                onClick={() => setCategoryFilter(categoryActive ? null : key)}
-                role="button"
-                tabIndex={0}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '10px',
-                  cursor: 'pointer',
                   padding: '4px 8px',
                   margin: '0 -8px 12px',
-                  borderRadius: '5px',
-                  background: categoryActive ? 'rgba(96,165,250,0.06)' : 'transparent',
-                  outline: categoryActive ? '1px solid #60a5fa' : 'none',
-                  transition: 'background 0.12s',
                 }}
-                onMouseEnter={e => { if (!categoryActive) e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
-                onMouseLeave={e => { if (!categoryActive) e.currentTarget.style.background = 'transparent' }}
               >
-                <span style={{ fontSize: '11px', fontWeight: 700, color: categoryActive ? '#60a5fa' : '#555', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
                   {label}
                 </span>
-                <span style={{ fontSize: '11px', color: categoryActive ? '#60a5fa' : '#333', whiteSpace: 'nowrap' }}>— {description}</span>
+                <span style={{ fontSize: '11px', color: '#333', whiteSpace: 'nowrap' }}>— {description}</span>
                 <div style={{ flex: 1, height: '0.5px', background: '#1e1e1e' }} />
                 <span style={{ fontSize: '11px', color: '#444', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{items.length} items</span>
               </div>
 
               {/* Items */}
-              {showItems && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {items.map(item => {
                   const ps = PRIORITY_STYLE[item.priority]
@@ -272,7 +289,6 @@ export default function RoadmapClient({ roadmap }: { roadmap: RoadmapItem[] }) {
                   )
                 })}
               </div>
-              )}
             </div>
           )
         })}

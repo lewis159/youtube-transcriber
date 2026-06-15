@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
+import SiteFooter from '../_components/SiteFooter'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: '⚡' },
@@ -19,6 +20,9 @@ const adminItems = [
   { href: '/admin/security', label: 'Security', icon: '🔒' },
   { href: '/admin/roadmap', label: 'Roadmap', icon: '🗺️' },
   { href: '/admin/changelog', label: 'Changelog', icon: '🕐' },
+  { href: '/admin/feature-flags', label: 'Feature Flags', icon: '🏳️' },
+  { href: '/admin/audit-log', label: 'Audit Log', icon: '📋' },
+  { href: '/admin/organisations', label: 'Organisations', icon: '🏢' },
 ]
 
 type Role = 'global_admin' | 'support' | 'org_admin' | 'user'
@@ -125,6 +129,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <main style={{ flex: 1, ...(isAdmin ? {} : { padding: '40px 32px', maxWidth: '1280px', width: '100%', margin: '0 auto' }) }}>
         {children}
       </main>
+
+      <SiteFooter />
 
     </div>
   )
