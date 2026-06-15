@@ -751,4 +751,128 @@ export const KB_ARTICLES: KBArticle[] = [
       },
     ],
   },
+
+  {
+    slug: 'cdn-caching-cloudflare',
+    title: 'Configuring Cloudflare cache rules to speed up the site',
+    description:
+      'Set up Cloudflare cache rules so static assets are served from the edge instead of round-tripping to the OVH server on every request.',
+    category: 'admin-system',
+    role: 'admin',
+    videoId: null,
+    readTime: 5,
+    steps: [
+      {
+        heading: 'Why cache at the edge',
+        body: 'Without edge caching, every request for a JavaScript bundle, font, or image travels all the way to the OVH origin server, gets served, and travels back. This is slow for users far from the server and wastes origin bandwidth. Cloudflare sits in front of the origin and can serve static assets directly from its global edge network — the request never reaches OVH at all after the first hit. The goal is to cache everything that is safe to cache (immutable static assets) while never caching anything user-specific.',
+      },
+      {
+        heading: 'Cache Rule 1: Next.js static assets',
+        body: 'In the Cloudflare dashboard, go to Caching > Cache Rules and create a new rule. Set the matcher to: URI Path starts with "/_next/static/". For the action, choose "Eligible for cache", then set Edge TTL to 1 year and Browser TTL to 1 year. This is safe because Next.js fingerprints every file in /_next/static/ with a content hash — when the content changes, the filename changes, so a stale cached copy can never be served by mistake. These files are effectively immutable.',
+      },
+      {
+        heading: 'Cache Rule 2: static file extensions',
+        body: 'Create a second rule to cover other static assets that are not under /_next/static/. Match on the URI path using the regex:\n\n  \\.(js|css|woff2|woff|ttf|svg|png|jpg|jpeg|gif|ico|webp)$\n\nSet the action to "Eligible for cache" with an Edge TTL of 1 month. These assets are not content-hashed, so a shorter (but still long) TTL of one month balances cache efficiency against the ability to push updates.',
+      },
+      {
+        heading: 'Cache Rule 3: the CRITICAL bypass rule',
+        body: 'This rule MUST be set to the HIGHEST priority so it is evaluated before the two caching rules above. Create a bypass rule that matches when any of the following is true:\n- URI Path starts with "/api/"\n- URI Path starts with "/admin"\n- URI Path starts with "/dashboard"\n- URI Path starts with "/settings"\n- the request Cookie contains "__session" (the Clerk session cookie)\nSet the action to "Bypass cache". Without this rule, Cloudflare could cache a logged-in user\'s personalised page (their dashboard, their settings) and then serve that exact page to a different user. The Clerk cookie check is the catch-all: any authenticated request carries __session, so it is never cached regardless of path.',
+      },
+      {
+        heading: 'Enable Brotli and Tiered Cache',
+        body: 'Two final optimisations in the Cloudflare dashboard:\n- Brotli — go to Speed > Optimization and enable Brotli compression. Brotli compresses text assets (JS, CSS, HTML) more efficiently than gzip.\n- Tiered Cache — go to Caching > Tiered Cache and enable it. Tiered Cache uses Cloudflare\'s larger regional data centres as an upper tier, so a cache miss in a small edge location is filled from a nearby Cloudflare tier rather than going all the way back to OVH. This dramatically reduces origin load.',
+      },
+    ],
+  },
+
+  {
+    slug: 'nginx-static-caching',
+    title: 'The nginx caching and compression layer',
+    description:
+      'Understand the gzip compression and cache-control headers configured in nginx-ha/nginx.conf, and how to safely change them.',
+    category: 'admin-system',
+    role: 'admin',
+    videoId: null,
+    readTime: 4,
+    steps: [
+      {
+        heading: 'Gzip compression',
+        body: 'The nginx config at nginx-ha/nginx.conf enables gzip compression for text-based responses. The relevant directives are:\n- gzip on — turns compression on\n- gzip_vary on — adds a "Vary: Accept-Encoding" header so caches store compressed and uncompressed copies separately\n- gzip_comp_level 6 — a balanced compression level (CPU cost vs ratio)\n- gzip_min_length 1024 — only compress responses larger than 1 KB (compressing tiny responses wastes CPU)\n- gzip_types — the list of MIME types to compress, including text/css, application/javascript, application/json, image/svg+xml, and font/woff2',
+      },
+      {
+        heading: 'Caching Next.js static assets',
+        body: 'A "location /_next/static/" block adds the header:\n\n  Cache-Control: public, max-age=31536000, immutable\n\nThis tells browsers (and any proxy in front, including Cloudflare) that these files can be cached for a year and are immutable — the browser will not even revalidate them. This is safe because Next.js content-hashes every filename in /_next/static/.',
+      },
+      {
+        heading: 'Caching other static file types',
+        body: 'A regex location block "location ~* \\.(js|css|woff2|...)$" adds the header:\n\n  Cache-Control: public, max-age=2592000\n\nThat is 30 days. This covers static assets that live outside /_next/static/ and are not content-hashed, so a 30-day TTL is used instead of the immutable one-year policy.',
+      },
+      {
+        heading: 'Dynamic and HTML routes are deliberately not cached',
+        body: 'There is no caching applied to dynamic pages or HTML responses. This is intentional: every HTML page is rendered per-user behind Clerk authentication. Caching an HTML route could leak one user\'s authenticated page to another. Only static assets (JS, CSS, fonts, images) are cached — never the per-request HTML.',
+      },
+      {
+        heading: 'Validating and reloading after a config change',
+        body: 'After editing nginx.conf, always validate the syntax before reloading:\n\n  nginx -t\n\nIf it reports "syntax is ok" and "test is successful", reload nginx to apply the change (nginx -s reload, or restart the nginx container). Remember that nginx matches regex location blocks (the ~* ones) before the prefix "location /" block, so the static-asset rules take precedence over the catch-all even though the catch-all appears to match everything.',
+      },
+    ],
+  },
+
+  {
+    slug: 'secrets-management-strategy',
+    title: 'How secrets and API keys are organised across three tiers',
+    description:
+      'A reference for where each kind of secret lives — public keys, bootstrap secrets, and third-party integration keys — and why.',
+    category: 'admin-architecture',
+    role: 'admin',
+    videoId: null,
+    readTime: 5,
+    steps: [
+      {
+        heading: 'Tier 1: Public keys',
+        body: 'These are the NEXT_PUBLIC_* variables: the Clerk publishable key, the Supabase anon key, and the Google Analytics measurement ID. They are shipped to the browser by design — any user can open dev tools and read them, and that is fine because they are meant to be public and are protected by other mechanisms (Clerk\'s domain restrictions, Supabase Row Level Security). Because Next.js inlines NEXT_PUBLIC_* values at build time, they are passed as Docker build args when the image is built. There is no point trying to hide them.',
+      },
+      {
+        heading: 'Tier 2: Bootstrap secrets',
+        body: 'These are the secrets the app needs simply to start: SUPABASE_SERVICE_ROLE_KEY, the encryption key, CLERK_SECRET_KEY, and CLERK_WEBHOOK_SECRET. They must live in Docker / Swarm secrets — never baked into the image and never stored in the database. The reason is a chicken-and-egg problem: the Supabase service-role key and the encryption key are exactly the things you need in order to read and decrypt the encrypted secrets table. If you stored them in that table, you would need them to read them — an impossible loop. So these foundational secrets are injected at the infrastructure layer via Swarm secrets, mounted into the container at runtime.',
+      },
+      {
+        heading: 'Tier 3: Third-party integration keys',
+        body: 'These are keys for services that are wired up or rotated while the app is already running: Stripe, Resend (email), and OpenAI. Because they are not needed to boot the app and may change during normal operation, they suit an encrypted table in Supabase, managed through an admin page. The admin UI is write-only and masked — you can paste a new key but never read an existing one back. The keys are decrypted only server-side, using the Tier 2 encryption key, at the moment they are needed for an API call.',
+      },
+      {
+        heading: 'The rule of thumb',
+        body: 'When deciding where a new secret belongs, ask one question: is this secret needed to START the app, or only fetched WHILE the app is running?\n- Needed to start running → Swarm secret (Tier 2). Anything required to read/decrypt the encrypted table itself must be here.\n- Fetched while already running → encrypted Supabase table (Tier 3), managed via the admin page.\nPublic, browser-shipped values are Tier 1 and need no protection at all.',
+      },
+    ],
+  },
+
+  {
+    slug: 'deploying-an-update',
+    title: 'Deploying a new build to production',
+    description:
+      'How a merged change becomes a live deployment — from the CI image build to rolling the running Swarm service onto the new image.',
+    category: 'admin-system',
+    role: 'admin',
+    videoId: null,
+    readTime: 3,
+    steps: [
+      {
+        heading: 'CI builds and pushes the image',
+        body: 'When a change is merged, the CI pipeline automatically builds a fresh Docker image and pushes it to the GitHub Container Registry as:\n\n  ghcr.io/lewis159/youtube-transcriber:latest\n\nNo manual build step is required — by the time the merge completes, the new "latest" image is available in the registry.',
+      },
+      {
+        heading: 'Roll the running service onto the new image',
+        body: 'To make the running service pick up the new image, run the following on the Swarm manager (or trigger it via Portainer):\n\n  docker service update --image ghcr.io/lewis159/youtube-transcriber:latest --force yt-transcriber_app\n\nThe --force flag ensures Swarm re-pulls and re-deploys even though the image tag ("latest") has not changed. Swarm then performs a rolling update of the service tasks.',
+      },
+      {
+        heading: 'Why there is no downtime',
+        body: 'The app runs as two replicas (app-ha-1 and app-ha-2) behind the nginx load balancer. During the rolling update, Swarm replaces one replica at a time: the first replica is updated and must come back healthy before the second is touched. At every moment at least one replica is serving traffic via nginx, so users experience no downtime.',
+      },
+      {
+        heading: 'Verify the deployment',
+        body: 'After the rollout completes, hard-refresh your browser (Ctrl+Shift+R / Cmd+Shift+R) to bypass any cached assets and pull the new bundle. Then confirm the deploy succeeded by checking the changelog or version indicator in the app — it should show the version you just shipped. If anything looks wrong, roll back by updating the service to the previous image tag.',
+      },
+    ],
+  },
 ]
