@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { getVideoByIdAndUser, getVideoTranscript } from '@/lib/supabase'
 import { generateTXT, generateSRT, generatePDF, generateZIP } from '@/lib/export'
+import { checkUserFeature, upgradeRequired } from '@/lib/feature-flags'
 
 export async function GET(
   request: NextRequest,
@@ -17,6 +18,19 @@ export async function GET(
 
     const { id } = await params
     const format = request.nextUrl.searchParams.get('format') || 'txt'
+
+    // Feature gate: export_pdf for PDF format, export_txt for all other formats
+    if (format === 'pdf') {
+      const canExportPdf = await checkUserFeature(userId, 'export_pdf')
+      if (!canExportPdf) {
+        return NextResponse.json(upgradeRequired('export_pdf'), { status: 403 })
+      }
+    } else {
+      const canExportTxt = await checkUserFeature(userId, 'export_txt')
+      if (!canExportTxt) {
+        return NextResponse.json(upgradeRequired('export_txt'), { status: 403 })
+      }
+    }
 
     const video = await getVideoByIdAndUser(id, userId)
     const transcript = await getVideoTranscript(id)
