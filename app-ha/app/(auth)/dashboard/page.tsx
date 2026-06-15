@@ -25,16 +25,29 @@ export default function DashboardPage() {
     loadVideos()
   }, [])
 
-  async function loadVideos() {
+  // Poll while any video is still being processed, so cards flip
+  // Processing → Ready on their own. Stops once nothing is in flight.
+  useEffect(() => {
+    const hasPending = videos.some(v => v.status === 'processing' || v.status === 'pending')
+    if (!hasPending) return
+
+    const interval = setInterval(() => {
+      loadVideos({ silent: true })
+    }, 4000)
+
+    return () => clearInterval(interval)
+  }, [videos])
+
+  async function loadVideos({ silent = false }: { silent?: boolean } = {}) {
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       const res = await fetch('/api/videos?limit=20')
       if (!res.ok) throw new Error('Failed to load videos')
       setVideos(await res.json())
     } catch (e) {
       console.error(e)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 

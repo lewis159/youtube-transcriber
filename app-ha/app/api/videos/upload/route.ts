@@ -6,6 +6,37 @@ import { createVideo, updateVideoStatus, saveTranscript } from '@/lib/supabase'
 import { fetchTranscript, extractYouTubeId, getYouTubeThumbnail, getYouTubeTitle } from '@/lib/transcript'
 import { checkUserFeature, upgradeRequired } from '@/lib/feature-flags'
 
+/**
+ * Background processing for a freshly-created video.
+ *
+ * This is intentionally fire-and-forget: the POST handler kicks this off
+ * WITHOUT awaiting it, so the request can return immediately while the
+ * (potentially slow) transcript scrape happens in the background.
+ *
+ * It must never throw to the caller — any failure flips the video to the
+ * 'error' status, which the dashboard already styles.
+ */
+async function processVideo(videoId: string, youtubeUrl: string) {
+  try {
+    // Fetch transcript (the slow part)
+    const transcript = await fetchTranscript(youtubeUrl)
+
+    // Persist it
+    await saveTranscript(videoId, transcript, 'en')
+
+    // Mark done
+    await updateVideoStatus(videoId, 'completed')
+  } catch (error) {
+    console.error(`Background processing failed for video ${videoId}:`, error)
+    // Best-effort flip to error — swallow any failure here so we never crash.
+    try {
+      await updateVideoStatus(videoId, 'error')
+    } catch (statusError) {
+      console.error(`Failed to set error status for video ${videoId}:`, statusError)
+    }
+  }
+}
+
 export async function POST(request: NextRequest) {
   let video: Awaited<ReturnType<typeof createVideo>> | undefined
 
@@ -44,24 +75,21 @@ export async function POST(request: NextRequest) {
       getYouTubeThumbnail(youtubeId)
     )
 
-    // Update status to processing
+    // Mark as processing up front so the dashboard shows the right state.
     await updateVideoStatus(video.id, 'processing')
 
-    // Fetch transcript
-    const transcript = await fetchTranscript(youtubeUrl)
+    // Kick off the heavy lifting in the background WITHOUT awaiting it, so the
+    // response returns immediately. Errors are handled inside processVideo and
+    // can never reject this handler.
+    void processVideo(video.id, youtubeUrl)
 
-    // Save transcript
-    await saveTranscript(video.id, transcript, 'en')
-
-    // Update status to completed
-    await updateVideoStatus(video.id, 'completed')
-
+    // Respond right away — the dashboard polls for the status to flip.
     return NextResponse.json(
       {
         success: true,
         videoId: video.id,
         youtubeId,
-        transcriptLength: transcript.length,
+        status: 'processing',
       },
       { status: 201 }
     )
