@@ -226,3 +226,57 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent);
 }
+
+/* ============================================================
+   PRINT STYLES — Knowledge Base article export
+   ============================================================ */
+@media print {
+  header, nav, footer,
+  [data-print-hide],
+  .btn-primary, .btn-secondary {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 12pt;
+    line-height: 1.6;
+  }
+
+  [data-print-show] {
+    display: block !important;
+  }
+
+  .knowledge-base-article {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+
+  /* Ensure article title is visible without gradient clip */
+  h1 {
+    -webkit-text-fill-color: black !important;
+    background: none !important;
+    color: black !important;
+  }
+
+  /* Step borders and accent colours — use a neutral for print */
+  [style*="borderLeft: '3px solid var(--accent)'"],
+  [style*="border-left"] {
+    border-left-color: #333 !important;
+  }
+
+  /* Step number circles */
+  [style*="background: 'var(--accent)'"] {
+    background: #333 !important;
+  }
+
+  a {
+    color: black !important;
+    text-decoration: none !important;
+  }
+
+  @page {
+    margin: 20mm;
+  }
+}

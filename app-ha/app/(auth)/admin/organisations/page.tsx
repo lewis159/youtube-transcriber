@@ -25,7 +25,7 @@ const orgs = [
   {
     id: '3',
     name: 'MediaFlow Agency',
-    tier: 'Creator',
+    tier: 'Pro',
     members: 3,
     admin: 'Sarah Mitchell',
     seatsUsed: 3,
@@ -46,7 +46,7 @@ const orgs = [
 
 function tierBadge(tier: string) {
   const styles: Record<string, { bg: string; color: string; border: string }> = {
-    Creator:    { bg: 'rgba(229,57,53,0.08)',  color: '#E53935', border: 'rgba(229,57,53,0.2)' },
+    Pro:        { bg: 'rgba(229,57,53,0.08)',  color: '#E53935', border: 'rgba(229,57,53,0.2)' },
     Studio:     { bg: 'rgba(229,57,53,0.15)',  color: '#ff6b6b', border: 'rgba(229,57,53,0.35)' },
     Enterprise: { bg: 'rgba(229,57,53,0.25)',  color: '#ff8a80', border: 'rgba(229,57,53,0.5)' },
   }

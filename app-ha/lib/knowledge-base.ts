@@ -194,12 +194,12 @@ export const KB_ARTICLES: KBArticle[] = [
         body: 'Click your avatar in the top-right corner and select "Settings". On the Settings page, choose the "Plan & Usage" tab. You will see a summary of your current plan, how many transcripts you have used this month, and your remaining allowance.',
       },
       {
-        heading: 'Understand the Explorer plan',
-        body: 'Explorer is the free tier. It includes:\n- 5 transcripts per month\n- TXT export only\n- No folder organisation\n- 7-day transcript retention\nIdeal for casual users who want to try the product.',
+        heading: 'Understand the Starter plan',
+        body: 'Starter is the free tier. It includes:\n- 5 transcripts total\n- TXT export only\n- No folder organisation\nIdeal for casual users who want to try the product.',
       },
       {
-        heading: 'Understand the Creator plan',
-        body: 'Creator is designed for content creators and students. It includes:\n- 50 transcripts per month\n- TXT and PDF export\n- Folder organisation\n- Unlimited transcript retention\n- Share links with 24h / 7-day expiry',
+        heading: 'Understand the Pro plan',
+        body: 'Pro is designed for content creators and students. It includes:\n- 10 transcripts per month\n- TXT and PDF export\n- Folder organisation\n- Unlimited transcript retention\n- Share links\n- URL screenshots',
       },
       {
         heading: 'Understand the Studio plan',
@@ -308,7 +308,7 @@ export const KB_ARTICLES: KBArticle[] = [
       },
       {
         heading: 'Change the user\'s tier',
-        body: 'In the user profile, locate the "Subscription Tier" dropdown. Select the new tier (Explorer, Creator, Studio, or Enterprise) and click "Save". The change takes effect immediately. An audit log entry is created automatically recording who made the change and when.',
+        body: 'In the user profile, locate the "Subscription Tier" dropdown. Select the new tier (Starter, Pro, Studio, or Enterprise) and click "Save". The change takes effect immediately. An audit log entry is created automatically recording who made the change and when.',
       },
       {
         heading: 'Suspend a user',
@@ -415,7 +415,7 @@ export const KB_ARTICLES: KBArticle[] = [
       },
       {
         heading: 'Set the organisation tier',
-        body: 'On the organisation detail page, use the "Subscription Tier" dropdown to assign the org\'s plan (Explorer, Creator, Studio, or Enterprise). The tier applies to all members of the organisation. Individual members\' personal plan tiers are overridden by the org tier while they are active members.',
+        body: 'On the organisation detail page, use the "Subscription Tier" dropdown to assign the org\'s plan (Starter, Pro, Studio, or Enterprise). The tier applies to all members of the organisation. Individual members\' personal plan tiers are overridden by the org tier while they are active members.',
       },
     ],
   },

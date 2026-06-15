@@ -69,7 +69,7 @@ export default function DashboardPage() {
       setExportingId(videoId)
       const res = await fetch(`/api/videos/${videoId}/export?format=${format}`)
       if (res.status === 403) {
-        alert('PDF export requires Creator plan or above. Upgrade to unlock.')
+        alert('PDF export requires Pro plan or above. Upgrade to unlock.')
         return
       }
       if (!res.ok) throw new Error('Export failed')
@@ -298,7 +298,7 @@ export default function DashboardPage() {
                         {([
                           { format: 'txt', label: 'Plain Text (.txt)' },
                           { format: 'srt', label: 'Subtitles (.srt)' },
-                          { format: 'pdf', label: 'PDF — Creator+' },
+                          { format: 'pdf', label: 'PDF — Pro+' },
                           { format: 'zip', label: 'All formats (.zip)' },
                         ] as const).map(({ format, label }) => (
                           <button

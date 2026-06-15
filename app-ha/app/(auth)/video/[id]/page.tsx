@@ -63,7 +63,7 @@ export default function VideoDetailPage({ params }: { params: Promise<{ id: stri
       setExportingFmt(format)
       const res = await fetch(`/api/videos/${id}/export?format=${format}`)
       if (res.status === 403) {
-        alert('PDF export requires Creator plan or above. Upgrade to unlock.')
+        alert('PDF export requires Pro plan or above. Upgrade to unlock.')
         return
       }
       if (!res.ok) throw new Error('Export failed')
@@ -186,7 +186,7 @@ export default function VideoDetailPage({ params }: { params: Promise<{ id: stri
                   fontSize: '13px',
                   opacity: video.status !== 'completed' ? 0.4 : 1,
                 }}
-                title={fmt === 'pdf' ? 'Creator plan required' : undefined}
+                title={fmt === 'pdf' ? 'Pro plan required' : undefined}
               >
                 {exportingFmt === fmt ? 'Exporting…' : `↓ ${label}`}
               </button>

@@ -1,22 +1,22 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 
-type TierName = 'Explorer' | 'Creator' | 'Studio' | 'Enterprise'
+type TierName = 'Starter' | 'Pro' | 'Studio' | 'Enterprise'
 
 const features: { key: string; label: string; tiers: Record<TierName, boolean> }[] = [
-  { key: 'transcribe',        label: 'Transcribe',          tiers: { Explorer: true,  Creator: true,  Studio: true,  Enterprise: true  } },
-  { key: 'notes',             label: 'Notes',               tiers: { Explorer: true,  Creator: true,  Studio: true,  Enterprise: true  } },
-  { key: 'export_txt',        label: 'Export TXT',          tiers: { Explorer: true,  Creator: true,  Studio: true,  Enterprise: true  } },
-  { key: 'export_pdf',        label: 'Export PDF',          tiers: { Explorer: false, Creator: true,  Studio: true,  Enterprise: true  } },
-  { key: 'folders',           label: 'Folders',             tiers: { Explorer: false, Creator: true,  Studio: true,  Enterprise: true  } },
-  { key: 'share_links',       label: 'Share Links',         tiers: { Explorer: false, Creator: true,  Studio: true,  Enterprise: true  } },
-  { key: 'link_screenshots',  label: 'Link Screenshots',    tiers: { Explorer: false, Creator: true,  Studio: true,  Enterprise: true  } },
-  { key: 'ai_chapters',       label: 'AI Chapters',         tiers: { Explorer: false, Creator: true,  Studio: true,  Enterprise: true  } },
-  { key: 'api_access',        label: 'API Access',          tiers: { Explorer: false, Creator: false, Studio: false, Enterprise: true  } },
-  { key: 'team_seats',        label: 'Team Seats',          tiers: { Explorer: false, Creator: false, Studio: false, Enterprise: true  } },
+  { key: 'transcribe',        label: 'Transcribe',          tiers: { Starter: true,  Pro: true,  Studio: true,  Enterprise: true  } },
+  { key: 'notes',             label: 'Notes',               tiers: { Starter: false, Pro: false, Studio: true,  Enterprise: true  } },
+  { key: 'export_txt',        label: 'Export TXT',          tiers: { Starter: true,  Pro: true,  Studio: true,  Enterprise: true  } },
+  { key: 'export_pdf',        label: 'Export PDF',          tiers: { Starter: false, Pro: true,  Studio: true,  Enterprise: true  } },
+  { key: 'folders',           label: 'Folders',             tiers: { Starter: false, Pro: true,  Studio: true,  Enterprise: true  } },
+  { key: 'share_links',       label: 'Share Links',         tiers: { Starter: false, Pro: true,  Studio: true,  Enterprise: true  } },
+  { key: 'link_screenshots',  label: 'Link Screenshots',    tiers: { Starter: false, Pro: true,  Studio: true,  Enterprise: true  } },
+  { key: 'ai_chapters',       label: 'AI Chapters',         tiers: { Starter: false, Pro: false, Studio: true,  Enterprise: true  } },
+  { key: 'api_access',        label: 'API Access',          tiers: { Starter: false, Pro: false, Studio: false, Enterprise: true  } },
+  { key: 'team_seats',        label: 'Team Seats',          tiers: { Starter: false, Pro: false, Studio: false, Enterprise: true  } },
 ]
 
-const tiers: TierName[] = ['Explorer', 'Creator', 'Studio', 'Enterprise']
+const tiers: TierName[] = ['Starter', 'Pro', 'Studio', 'Enterprise']
 
 const overrides = [
   { user: 'James Walker',  feature: 'export_pdf',  direction: 'enabled',  setBy: 'admin@yt.io', date: '13 Jun 2026' },

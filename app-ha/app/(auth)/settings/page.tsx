@@ -4,25 +4,25 @@ import { useUser } from '@clerk/nextjs'
 import Link from 'next/link'
 
 const TIER_INFO = {
-  explorer: {
-    name: 'Explorer',
+  starter: {
+    name: 'Starter',
     price: 'Free',
     color: '#888',
-    features: ['3 transcriptions/month', 'Basic search', 'Download TXT'],
-    next: 'creator',
+    features: ['5 transcriptions total', 'Transcript viewer & search', 'Download TXT'],
+    next: 'pro',
   },
-  creator: {
-    name: 'Creator',
+  pro: {
+    name: 'Pro',
     price: '$9/mo',
     color: '#E53935',
-    features: ['Unlimited transcriptions', 'All export formats', 'Folders & sharing'],
+    features: ['10 transcriptions/month', 'PDF & all export formats', 'Folders & sharing'],
     next: 'studio',
   },
   studio: {
     name: 'Studio',
     price: '$29/mo',
     color: '#ff6b6b',
-    features: ['Everything in Creator', 'AI chapters', 'Advanced analytics', 'Priority support'],
+    features: ['Everything in Pro', 'AI chapters', 'Notes panel', 'Priority support'],
     next: 'enterprise',
   },
   enterprise: {
@@ -37,7 +37,7 @@ const TIER_INFO = {
 export default function SettingsPage() {
   const { user, isLoaded } = useUser()
 
-  const currentTier = 'explorer' as keyof typeof TIER_INFO
+  const currentTier = 'starter' as keyof typeof TIER_INFO
   const tierInfo = TIER_INFO[currentTier]
 
   if (!isLoaded) {
