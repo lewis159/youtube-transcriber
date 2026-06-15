@@ -408,7 +408,7 @@ export default function UsersAndOrgsPage() {
               <input type="text" placeholder="Search by name or email..."
                 style={{ flex: 1, padding: '8px 12px', borderRadius: '6px', background: '#0d0d0d', border: '0.5px solid #2a2a2a', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }} />
               <select style={{ padding: '8px 12px', borderRadius: '6px', background: '#0d0d0d', border: '0.5px solid #2a2a2a', color: 'var(--text-secondary)', fontSize: '13px', outline: 'none' }}>
-                <option>All tiers</option><option>Explorer</option><option>Creator</option><option>Studio</option><option>Enterprise</option>
+                <option>All tiers</option><option>Starter</option><option>Pro</option><option>Studio</option><option>Enterprise</option>
               </select>
               <select style={{ padding: '8px 12px', borderRadius: '6px', background: '#0d0d0d', border: '0.5px solid #2a2a2a', color: 'var(--text-secondary)', fontSize: '13px', outline: 'none' }}>
                 <option>All</option><option>Trial</option><option>Active</option><option>Suspended</option>
