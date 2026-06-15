@@ -31,8 +31,11 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files — keep .env.example, ignore everything with real values
+.env
+.env.*
 .env*.local
 .env.local
+!.env.example
 
 # vercel
 .vercel

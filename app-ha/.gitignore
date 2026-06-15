@@ -22,8 +22,11 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files
+# local env files — ignore real values, keep .env.example
+.env
+.env.*
 .env*.local
+!.env.example
 
 # vercel
 .vercel
