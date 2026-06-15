@@ -27,6 +27,34 @@ interface PendingAction {
 
 const PROJECT_LABEL = 'yt-transcriber'
 
+// Name tokens that identify this project's containers (case-insensitive substring match).
+const PROJECT_NAME_TOKENS = [
+  'app-ha',
+  'nginx-ha',
+  'app-400',
+  'test-runner',
+  'youtube-transcriber',
+  'yt-transcriber',
+  'yt_transcriber',
+  'youtube_transcriber',
+]
+
+// Label values / keys that identify this project (case-insensitive substring match).
+const PROJECT_LABEL_SUBSTRINGS = [
+  'youtube',
+  'transcri',
+  'yt-trans',
+  'yt_trans',
+  'yt-transcription',
+]
+
+// Labels whose values we inspect for the project substrings above.
+const PROJECT_LABEL_KEYS = [
+  'com.docker.compose.project',
+  'project',
+  'com.docker.stack.namespace',
+]
+
 const GROUP_PREFIXES: Record<string, string> = {
   nginx:    'Nginx',
   app:      'App',
@@ -44,11 +72,25 @@ const ACTION_META: Record<ActionType, { label: string; icon: string; danger: boo
 }
 
 function isProjectContainer(c: DockerContainer): boolean {
-  const nameMatch = (c.Names?.[0] ?? '').toLowerCase().includes(PROJECT_LABEL)
-  const labelMatch = Object.values(c.Labels ?? {}).some(v =>
-    v.toLowerCase().includes(PROJECT_LABEL)
-  ) || (c.Labels?.['com.docker.compose.project'] ?? '').toLowerCase().includes(PROJECT_LABEL)
-  return nameMatch || labelMatch
+  const name = (c.Names?.[0] ?? '').replace(/^\//, '').toLowerCase()
+
+  // 1. Name matches a known project token.
+  if (PROJECT_NAME_TOKENS.some(t => name.includes(t))) return true
+
+  // 2. Project redis (exactly `redis` or starts with `redis`).
+  if (name === 'redis' || name.startsWith('redis')) return true
+
+  // 3. Any label value contains a project substring.
+  const labelValues = Object.values(c.Labels ?? {}).map(v => (v ?? '').toLowerCase())
+  if (labelValues.some(v => PROJECT_LABEL_SUBSTRINGS.some(s => v.includes(s)))) return true
+
+  // 3b. Specific compose/stack label keys contain a project substring.
+  for (const key of PROJECT_LABEL_KEYS) {
+    const val = (c.Labels?.[key] ?? '').toLowerCase()
+    if (PROJECT_LABEL_SUBSTRINGS.some(s => val.includes(s))) return true
+  }
+
+  return false
 }
 
 function getGroup(name: string): string {
@@ -118,7 +160,10 @@ export default function ContainersPage() {
     return () => clearInterval(interval)
   }, [fetchContainers])
 
-  const displayed = showAll ? allContainers : allContainers.filter(isProjectContainer)
+  const projectMatches = allContainers.filter(isProjectContainer)
+  // Safety net: if the filter matches nothing but containers DO exist, fall back to showing all.
+  const filterFellBack = !showAll && projectMatches.length === 0 && allContainers.length > 0
+  const displayed = showAll || filterFellBack ? allContainers : projectMatches
 
   const grouped: GroupedContainers = {}
   for (const c of displayed) {
@@ -179,7 +224,7 @@ export default function ContainersPage() {
     setTimeout(() => setToast(null), 3500)
   }
 
-  const projectCount = allContainers.filter(isProjectContainer).length
+  const projectCount = projectMatches.length
 
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh', color: 'var(--text-primary)', position: 'relative' }}>
@@ -301,6 +346,16 @@ export default function ContainersPage() {
       </div>
 
       <div style={{ padding: '24px' }}>
+
+        {!loading && !error && filterFellBack && (
+          <div style={{
+            fontSize: '12px', color: '#eab308',
+            background: 'rgba(234,179,8,0.06)', border: '0.5px solid rgba(234,179,8,0.25)',
+            borderRadius: '6px', padding: '10px 14px', marginBottom: '16px',
+          }}>
+            No containers matched the project filter — showing all. Adjust the filter in code if needed.
+          </div>
+        )}
 
         {!loading && !error && (
           <div style={{ fontSize: '12px', color: '#555', marginBottom: '16px' }}>
