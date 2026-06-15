@@ -29,6 +29,7 @@ export default async function LandingPage() {
         <nav style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
           <a href="#features" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Features</a>
           <a href="#pricing" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Pricing</a>
+          <a href="/knowledge-base" style={{ color: 'var(--text-secondary)', fontSize: '14px', textDecoration: 'none' }}>Knowledge Base</a>
           {isSignedIn ? (
             <Link href="/dashboard" className="btn-primary" style={{ padding: '8px 20px', fontSize: '14px' }}>
               Go to Dashboard
@@ -197,22 +198,22 @@ export default async function LandingPage() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', alignItems: 'start' }}>
 
-            {/* Explorer */}
+            {/* Starter */}
             <div className="glass-card" style={{ padding: '36px', display: 'flex', flexDirection: 'column', gap: '0' }}>
-              <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>Explorer</div>
+              <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>Starter</div>
               <div style={{ fontSize: '40px', fontWeight: 900, color: 'var(--accent)', margin: '12px 0 4px' }}>Free</div>
               <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '28px' }}>Forever free</div>
               <Link href={isSignedIn ? '/dashboard' : '/sign-up'} className="btn-secondary" style={{ textAlign: 'center', marginBottom: '28px', textDecoration: 'none' }}>
                 {isSignedIn ? 'Go to Dashboard' : 'Get started'}
               </Link>
               <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {['3 transcriptions/month', 'Basic search', 'Download TXT', '❌ PDF & exports', '❌ Folders', '❌ Sharing'].map(f => (
+                {['5 transcriptions total', 'Transcript viewer & search', 'Download TXT', '❌ PDF export', '❌ Folders', '❌ Sharing'].map(f => (
                   <li key={f} style={{ fontSize: '14px', color: f.startsWith('❌') ? 'var(--text-muted)' : 'var(--text-secondary)' }}>{f}</li>
                 ))}
               </ul>
             </div>
 
-            {/* Creator — featured */}
+            {/* Pro — featured */}
             <div style={{
               padding: '36px',
               borderRadius: '16px',
@@ -240,7 +241,7 @@ export default async function LandingPage() {
               }}>
                 MOST POPULAR
               </div>
-              <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>Creator</div>
+              <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>Pro</div>
               <div style={{ fontSize: '40px', fontWeight: 900, color: 'var(--accent)', margin: '12px 0 4px' }}>
                 $9<span style={{ fontSize: '18px', fontWeight: 500 }}>/mo</span>
               </div>
@@ -249,7 +250,7 @@ export default async function LandingPage() {
                 {isSignedIn ? 'Go to Dashboard' : 'Start free trial'}
               </Link>
               <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {['Unlimited transcriptions', 'Advanced search', 'All export formats', 'Folders & organisation', 'Share links', '❌ AI features'].map(f => (
+                {['10 transcriptions/month', 'PDF & all export formats', 'Folders & organisation', 'Share links', 'URL screenshots', '❌ AI features'].map(f => (
                   <li key={f} style={{ fontSize: '14px', color: f.startsWith('❌') ? 'var(--text-muted)' : 'var(--text-secondary)' }}>{f}</li>
                 ))}
               </ul>
@@ -266,7 +267,7 @@ export default async function LandingPage() {
                 {isSignedIn ? 'Go to Dashboard' : 'Upgrade to Studio'}
               </Link>
               <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {['Everything in Creator', 'AI chapter detection', 'Smart corrections', 'Advanced sharing', 'Download analytics', 'Priority support'].map(f => (
+                {['Everything in Pro', 'AI chapter detection', 'Notes panel', 'Scheduled transcription', 'Organisations & teams', 'Priority support'].map(f => (
                   <li key={f} style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{f}</li>
                 ))}
               </ul>
@@ -327,8 +328,14 @@ export default async function LandingPage() {
             <span style={{ color: 'var(--accent)' }}>YT</span> Transcriber
           </div>
           <div style={{ display: 'flex', gap: '32px', flexWrap: 'wrap' }}>
-            {['Features', 'Pricing', 'Privacy', 'Terms'].map(link => (
-              <a key={link} href="#" style={{ fontSize: '14px', color: 'var(--text-muted)', textDecoration: 'none' }}>{link}</a>
+            {[
+              { label: 'Features', href: '#features' },
+              { label: 'Pricing', href: '#pricing' },
+              { label: 'Knowledge Base', href: '/knowledge-base' },
+              { label: 'Privacy', href: '#' },
+              { label: 'Terms', href: '#' },
+            ].map(({ label, href }) => (
+              <a key={label} href={href} style={{ fontSize: '14px', color: 'var(--text-muted)', textDecoration: 'none' }}>{label}</a>
             ))}
           </div>
           <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
