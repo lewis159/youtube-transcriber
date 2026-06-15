@@ -48,6 +48,16 @@ export default async function BillingPage() {
         <span style={{ fontSize: '11px', color: '#E53935', fontFamily: 'monospace', background: 'rgba(229,57,53,0.08)', border: '0.5px solid rgba(229,57,53,0.2)', padding: '2px 8px', borderRadius: '4px' }}>ALPHA v0.1.0</span>
       </div>
 
+      {/* Demo data banner */}
+      <div style={{
+        background: 'rgba(234,179,8,0.08)', borderBottom: '0.5px solid rgba(234,179,8,0.25)',
+        padding: '10px 24px', display: 'flex', alignItems: 'center', gap: '8px',
+        fontSize: '12px', color: '#eab308',
+      }}>
+        <span>⚠</span>
+        <span>Demo data — this page shows sample data and is not yet connected to live billing data. Actions are disabled.</span>
+      </div>
+
       <div style={{ padding: '24px' }}>
         {/* Stat cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
@@ -97,7 +107,7 @@ export default async function BillingPage() {
                     <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)' }}>{tx.date}</td>
                     <td style={{ padding: '10px 14px' }}>{statusBadge(tx.status)}</td>
                     <td style={{ padding: '10px 14px' }}>
-                      <button style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '4px', background: 'transparent', border: '0.5px solid #2a2a2a', color: 'var(--text-secondary)', cursor: 'pointer' }}>View</button>
+                      <button disabled style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '4px', background: 'transparent', border: '0.5px solid #2a2a2a', color: 'var(--text-secondary)', cursor: 'not-allowed', opacity: 0.4 }}>View</button>
                     </td>
                   </tr>
                 ))}
@@ -121,8 +131,8 @@ export default async function BillingPage() {
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>{fp.plan}</div>
                   <div style={{ fontSize: '11px', color: '#E53935', marginBottom: '12px' }}>Reason: {fp.reason}</div>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button style={{ flex: 1, padding: '6px', borderRadius: '4px', background: '#E53935', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Retry</button>
-                    <button style={{ flex: 1, padding: '6px', borderRadius: '4px', background: 'transparent', color: 'var(--text-secondary)', border: '0.5px solid #2a2a2a', cursor: 'pointer', fontSize: '12px' }}>Contact user</button>
+                    <button disabled style={{ flex: 1, padding: '6px', borderRadius: '4px', background: '#E53935', color: '#fff', border: 'none', cursor: 'not-allowed', opacity: 0.4, fontSize: '12px', fontWeight: 600 }}>Retry</button>
+                    <button disabled style={{ flex: 1, padding: '6px', borderRadius: '4px', background: 'transparent', color: 'var(--text-secondary)', border: '0.5px solid #2a2a2a', cursor: 'not-allowed', opacity: 0.4, fontSize: '12px' }}>Contact user</button>
                   </div>
                 </div>
               ))}
