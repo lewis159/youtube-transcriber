@@ -1,23 +1,41 @@
+import { unstable_cache } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase'
 import AdminQuickLinks from './AdminQuickLinks'
 
+// ── Cached aggregate admin stats (non-user-specific, no auth state) ──────────
+const getOverviewStats = unstable_cache(
+  async () => {
+    const [
+      { count: totalUsers },
+      { count: totalVideos },
+      { data: videoRows },
+      { data: recentUsersRaw },
+    ] = await Promise.all([
+      supabaseAdmin.from('users').select('*', { count: 'exact', head: true }),
+      supabaseAdmin.from('videos').select('*', { count: 'exact', head: true }),
+      supabaseAdmin.from('videos').select('status'),
+      supabaseAdmin
+        .from('users')
+        .select('id, email, tier, role, created_at')
+        .order('created_at', { ascending: false })
+        .limit(5),
+    ])
+
+    // Return only plain-serialisable data (counts + row arrays), no client objects.
+    return {
+      totalUsers: totalUsers ?? null,
+      totalVideos: totalVideos ?? null,
+      videoRows: videoRows ?? [],
+      recentUsersRaw: recentUsersRaw ?? [],
+    }
+  },
+  ['admin-overview-stats'],
+  { revalidate: 60, tags: ['admin-overview-stats'] }
+)
+
 export default async function AdminOverviewPage() {
-  // ── Fetch real stats from Supabase ──────────────────────────────────────────
-  const [
-    { count: totalUsers },
-    { count: totalVideos },
-    { data: videoRows },
-    { data: recentUsersRaw },
-  ] = await Promise.all([
-    supabaseAdmin.from('users').select('*', { count: 'exact', head: true }),
-    supabaseAdmin.from('videos').select('*', { count: 'exact', head: true }),
-    supabaseAdmin.from('videos').select('status'),
-    supabaseAdmin
-      .from('users')
-      .select('id, email, tier, role, created_at')
-      .order('created_at', { ascending: false })
-      .limit(5),
-  ])
+  // ── Fetch real stats from Supabase (cached for 60s) ─────────────────────────
+  const { totalUsers, totalVideos, videoRows, recentUsersRaw } = await getOverviewStats()
 
   const doneCount   = videoRows?.filter(v => v.status === 'done' || v.status === 'completed').length ?? 0
   const successRate = totalVideos && totalVideos > 0 ? Math.round((doneCount / totalVideos) * 100) : 0
