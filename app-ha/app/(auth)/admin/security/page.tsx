@@ -1,8 +1,8 @@
 const findings = [
-  { id: 1,  severity: 'CRITICAL', area: 'Auth / Admin API',     issue: 'No auth or role checks on /api/admin/* routes',                         fixed: false },
+  { id: 1,  severity: 'CRITICAL', area: 'Auth / Admin API',     issue: 'No auth or role checks on /api/admin/* routes',                         fixed: true  },
   { id: 2,  severity: 'CRITICAL', area: 'Auth / Admin Pages',   issue: 'Admin pages only check userId, not global_admin role',                   fixed: false },
   { id: 9,  severity: 'CRITICAL', area: 'Docker',               issue: 'Docker socket mounted in root-running app containers',                    fixed: false },
-  { id: 14, severity: 'CRITICAL', area: 'Database',             issue: 'RLS enabled but zero policies — anon key blocked',                        fixed: false },
+  { id: 14, severity: 'CRITICAL', area: 'Database',             issue: 'RLS enabled but zero policies — anon key blocked',                        fixed: true  },
   { id: 24, severity: 'CRITICAL', area: 'Test Runner',          issue: 'Test runner accessible with no auth on Docker network',                   fixed: false },
   { id: 3,  severity: 'HIGH',     area: 'Auth Layout',          issue: 'Auth layout is client component — no server role check',                  fixed: false },
   { id: 4,  severity: 'HIGH',     area: 'Auth / KB',            issue: 'Admin KB articles gated on userId only, not global_admin',                fixed: false },
@@ -18,7 +18,7 @@ const findings = [
   { id: 7,  severity: 'MEDIUM',   area: 'API',                  issue: '/api/health makes real DB queries publicly routable',                     fixed: false },
   { id: 8,  severity: 'MEDIUM',   area: 'API',                  issue: 'Webhook wildcard makes all /api/webhooks/* public',                       fixed: false },
   { id: 12, severity: 'MEDIUM',   area: 'Test Runner',          issue: 'Test runner inherits full process.env including secrets',                  fixed: false },
-  { id: 16, severity: 'MEDIUM',   area: 'Database',             issue: 'Role value mismatch: admin vs global_admin',                              fixed: false },
+  { id: 16, severity: 'MEDIUM',   area: 'Database',             issue: 'Role value mismatch: admin vs global_admin',                              fixed: true  },
   { id: 18, severity: 'MEDIUM',   area: 'Input Validation',     issue: 'limit param uncapped — excessive DB queries possible',                    fixed: false },
   { id: 19, severity: 'MEDIUM',   area: 'Input Validation',     issue: 'Video title unsanitised in Content-Disposition header',                   fixed: false },
   { id: 20, severity: 'MEDIUM',   area: 'Business Logic',       issue: 'No credit check before transcript processing',                            fixed: false },
@@ -46,7 +46,7 @@ const priorityItems = [
     refs: [9],
   },
   {
-    label: 'Define RLS policies for all Supabase tables (finding 15 is fixed; 14 still open)',
+    label: 'Define RLS policies for all Supabase tables (findings 14 and 15 are now fixed)',
     refs: [14, 15],
   },
   {
