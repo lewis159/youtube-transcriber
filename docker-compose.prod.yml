@@ -22,8 +22,9 @@ services:
       - STRIPE_PRICE_STUDIO=${STRIPE_PRICE_STUDIO}
       - STRIPE_PRICE_ENTERPRISE=${STRIPE_PRICE_ENTERPRISE}
       - NEXT_PUBLIC_APP_URL=https://yt.bentech.dev
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Admin container monitor talks to Docker via the read-only socket proxy,
+      # never the raw socket (security finding #9).
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
     deploy:
       replicas: 2
       labels:
@@ -50,6 +51,56 @@ services:
     networks:
       - yt-prod
       - proxy
+
+  # Tecnativa docker-socket-proxy: the ONLY service that touches the real
+  # Docker socket. It exposes a locked-down HTTP API on :2375 to the app on the
+  # internal yt-prod network. Whitelist = container list + lifecycle only;
+  # every other API section stays denied (default 0).
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.2.0
+    environment:
+      # Read: list/inspect containers (GET /containers/json, /containers/{id}/json)
+      - CONTAINERS=1
+      # Write: allow POST so start/stop/pause/restart/kill work
+      - POST=1
+      # Everything else explicitly denied
+      - IMAGES=0
+      - NETWORKS=0
+      - VOLUMES=0
+      - SERVICES=0
+      - TASKS=0
+      - NODES=0
+      - SECRETS=0
+      - CONFIGS=0
+      - SWARM=0
+      - SYSTEM=0
+      - INFO=0
+      - EXEC=0
+      - AUTH=0
+      - BUILD=0
+      - COMMIT=0
+      - PLUGINS=0
+      - DISTRIBUTION=0
+      - SESSION=0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    deploy:
+      replicas: 1
+      # Must run where the socket lives — pin to a manager node.
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=docker-socket-proxy"
+        - "project.env=prod"
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 64M
+    networks:
+      - yt-prod
 
   redis:
     image: redis:7-alpine

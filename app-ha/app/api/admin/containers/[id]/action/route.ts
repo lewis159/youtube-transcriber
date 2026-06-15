@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import * as http from 'http'
 import { requireAdmin } from '@/lib/admin-auth'
 import { logAudit } from '@/lib/audit'
+import { dockerPost } from '@/lib/docker'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,29 +18,14 @@ const AUDIT_ACTION: Record<string, string> = {
   kill:    'container_kill',
 }
 
-function dockerPost(path: string): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const req = http.request(
-      {
-        socketPath: '/var/run/docker.sock',
-        path,
-        method: 'POST',
-        headers: { Host: 'localhost', 'Content-Length': 0 },
-      },
-      (res) => { resolve(res.statusCode ?? 500) }
-    )
-    req.on('error', reject)
-    req.end()
-  })
-}
-
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const denied = await requireAdmin()
   if (denied) return denied
 
+  const { id } = await params
   const { userId } = await auth()
   const { action, phrase, containerName } = await req.json()
 
@@ -55,7 +40,7 @@ export async function POST(
   }
 
   try {
-    const status = await dockerPost(`/v1.44/containers/${params.id}/${action}`)
+    const status = await dockerPost(`/containers/${id}/${action}`)
     if (status >= 400 && status !== 304) {
       return NextResponse.json({ error: `Docker returned ${status}` }, { status: 502 })
     }
@@ -68,7 +53,7 @@ export async function POST(
       actorClerkId: userId,
     })
 
-    return NextResponse.json({ success: true, action, containerId: params.id })
+    return NextResponse.json({ success: true, action, containerId: id })
   } catch {
     return NextResponse.json({ error: 'Docker socket unavailable' }, { status: 503 })
   }

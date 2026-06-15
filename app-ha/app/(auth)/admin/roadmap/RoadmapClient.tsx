@@ -4,8 +4,8 @@ import { useState } from 'react'
 import type { RoadmapItem as RoadmapItemBase } from '@/lib/supabase'
 
 type Status = 'completed' | 'in_progress' | 'pending' | 'future'
-type Priority = 'critical' | 'high' | 'medium' | 'low' | 'nice_to_have'
-type Category = 'security' | 'core' | 'prelaunch' | 'admin' | 'v2'
+type Priority = 'critical' | 'high' | 'medium' | 'low' | 'nice_to_have' | 'op_security'
+type Category = 'security' | 'core' | 'prelaunch' | 'admin' | 'v2' | 'sentinel'
 
 interface RoadmapItem extends RoadmapItemBase {
   status: Status
@@ -26,6 +26,7 @@ const PRIORITY_STYLE: Record<Priority, { label: string; color: string; bg: strin
   medium:       { label: 'Medium',       color: '#60a5fa', bg: 'rgba(96,165,250,0.06)',  border: 'rgba(96,165,250,0.2)',   leftBorder: '#60a5fa' },
   low:          { label: 'Low',          color: '#888',    bg: 'rgba(255,255,255,0.04)', border: '#333',                   leftBorder: '#333' },
   nice_to_have: { label: 'Nice to Have', color: '#6b7280', bg: 'rgba(107,114,128,0.06)', border: 'rgba(107,114,128,0.2)', leftBorder: '#2a2a2a' },
+  op_security:  { label: 'Op Security',  color: '#a855f7', bg: 'rgba(168,85,247,0.08)',  border: 'rgba(168,85,247,0.25)',  leftBorder: '#a855f7' },
 }
 
 const CATEGORIES: { key: Category; label: string; description: string }[] = [
@@ -34,6 +35,7 @@ const CATEGORIES: { key: Category; label: string; description: string }[] = [
   { key: 'prelaunch', label: 'Pre-Launch',       description: 'Required before going live' },
   { key: 'admin',     label: 'Admin Portal',     description: 'Polish & tooling improvements' },
   { key: 'v2',        label: 'Nice to Have',     description: 'Future features & v2 ideas' },
+  { key: 'sentinel',  label: 'Op Security',      description: 'Operations & Security Console (Sentinel) — full build list' },
 ]
 
 export default function RoadmapClient({ roadmap }: { roadmap: RoadmapItem[] }) {
@@ -90,7 +92,7 @@ export default function RoadmapClient({ roadmap }: { roadmap: RoadmapItem[] }) {
         }}>
           {/* Priority chips (left) */}
           <span style={{ fontSize: '11px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginRight: '4px' }}>Priority</span>
-          {(['critical', 'high', 'medium', 'low', 'nice_to_have'] as Priority[]).map(p => {
+          {(['critical', 'high', 'medium', 'low', 'nice_to_have', 'op_security'] as Priority[]).map(p => {
             const ps = PRIORITY_STYLE[p]
             const active = priorityFilter === p
             return (
