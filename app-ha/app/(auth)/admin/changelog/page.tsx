@@ -4,10 +4,34 @@ import { useState } from 'react'
 
 const VERSIONS = [
   {
+    id: 'v0.1.1',
+    version: 'v0.1.1',
+    label: 'Alpha',
+    isCurrent: true,
+    date: '15 June 2026',
+    borderColor: '#E53935',
+    newFeatures: [
+      'Admin Security panel — live dashboard of all 28 security-review findings with severity, fix status, and priority action plan',
+      'Container controls — start / stop / pause / restart containers from the admin panel, protected by a typed confirmation phrase',
+      'Container monitor now filters to project containers only, with a "show all" toggle',
+      'Delete video button on the dashboard with confirmation',
+      'Google Analytics 4 integration (privacy-friendly, IP anonymised, env-var gated)',
+      'global_admin role checks (requireAdmin) on all /api/admin/* routes',
+    ],
+    changes: [
+      'Fixed admin overview page crash (server-component event-handler error) by extracting quick links into a client component',
+      'Landing page is now fully static — removed the per-request auth call, so it loads instantly; sign-in/dashboard CTAs are now resolved client-side',
+      'Knowledge base nav now shows a "Dashboard" link when signed in instead of always showing "Sign in"',
+      'Feature flags tier table redesigned as cumulative tier cards (Starter → Pro → Studio → Enterprise) — no more wall of crosses',
+      'Better upload error messages for private videos and videos without captions; failed videos now show an "error" status instead of being stuck on "processing"',
+      'Video titles now fetched from YouTube on upload, with the video ID shown as a fallback',
+    ],
+  },
+  {
     id: 'v0.1.0',
     version: 'v0.1.0',
     label: 'Alpha',
-    isCurrent: true,
+    isCurrent: false,
     date: '14 June 2026',
     borderColor: '#E53935',
     newFeatures: [
