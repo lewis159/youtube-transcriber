@@ -3,18 +3,18 @@ import { redirect } from 'next/navigation'
 
 const transactions = [
   { id: '1', user: 'Ben Percival',   plan: 'Studio',     amount: '£29.00', date: '14 Jun 2026', status: 'Paid' },
-  { id: '2', user: 'Sarah Mitchell', plan: 'Creator',    amount: '£12.00', date: '14 Jun 2026', status: 'Paid' },
+  { id: '2', user: 'Sarah Mitchell', plan: 'Pro',    amount: '£12.00', date: '14 Jun 2026', status: 'Paid' },
   { id: '3', user: 'Emma Davis',     plan: 'Enterprise', amount: '£89.00', date: '13 Jun 2026', status: 'Paid' },
-  { id: '4', user: 'James Walker',   plan: 'Explorer',   amount: '£0.00',  date: '13 Jun 2026', status: 'Refunded' },
+  { id: '4', user: 'James Walker',   plan: 'Starter',   amount: '£0.00',  date: '13 Jun 2026', status: 'Refunded' },
   { id: '5', user: 'Priya Sharma',   plan: 'Studio',     amount: '£29.00', date: '12 Jun 2026', status: 'Paid' },
-  { id: '6', user: 'Tom Hughes',     plan: 'Creator',    amount: '£12.00', date: '12 Jun 2026', status: 'Failed' },
-  { id: '7', user: 'Lisa Chen',      plan: 'Creator',    amount: '£9.00',  date: '11 Jun 2026', status: 'Refunded' },
-  { id: '8', user: 'Dan Cooper',     plan: 'Explorer',   amount: '£5.00',  date: '10 Jun 2026', status: 'Failed' },
+  { id: '6', user: 'Tom Hughes',     plan: 'Pro',    amount: '£12.00', date: '12 Jun 2026', status: 'Failed' },
+  { id: '7', user: 'Lisa Chen',      plan: 'Pro',    amount: '£9.00',  date: '11 Jun 2026', status: 'Refunded' },
+  { id: '8', user: 'Dan Cooper',     plan: 'Starter',   amount: '£5.00',  date: '10 Jun 2026', status: 'Failed' },
 ]
 
 const failedPayments = [
-  { user: 'Tom Hughes',  plan: 'Creator',  amount: '£12.00', reason: 'Card declined' },
-  { user: 'Dan Cooper',  plan: 'Explorer', amount: '£5.00',  reason: 'Insufficient funds' },
+  { user: 'Tom Hughes',  plan: 'Pro',  amount: '£12.00', reason: 'Card declined' },
+  { user: 'Dan Cooper',  plan: 'Starter', amount: '£5.00',  reason: 'Insufficient funds' },
   { user: 'Mark Ellis',  plan: 'Studio',   amount: '£29.00', reason: 'Expired card' },
 ]
 

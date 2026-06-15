@@ -15,11 +15,11 @@ const actionColors: Record<string, { bg: string; color: string }> = {
 }
 
 const logs = [
-  { ts: '2026-06-14 15:44:01', admin: 'admin@yt.io',  action: 'tier_change',       target: 'Sarah Mitchell', details: 'Explorer → Creator' },
+  { ts: '2026-06-14 15:44:01', admin: 'admin@yt.io',  action: 'tier_change',       target: 'Sarah Mitchell', details: 'Starter → Pro' },
   { ts: '2026-06-14 15:22:10', admin: 'admin@yt.io',  action: 'refund_issued',      target: 'James Walker',   details: '£9.00 refunded' },
   { ts: '2026-06-14 15:10:33', admin: 'admin@yt.io',  action: 'feature_override',   target: 'Tom Hughes',     details: 'ai_chapters → enabled' },
   { ts: '2026-06-14 14:55:01', admin: 'admin@yt.io',  action: 'org_created',        target: 'Acme Corp',      details: 'Enterprise tier' },
-  { ts: '2026-06-14 14:31:44', admin: 'admin@yt.io',  action: 'tier_change',        target: 'Ben Percival',   details: 'Creator → Studio' },
+  { ts: '2026-06-14 14:31:44', admin: 'admin@yt.io',  action: 'tier_change',        target: 'Ben Percival',   details: 'Pro → Studio' },
   { ts: '2026-06-14 13:50:12', admin: 'admin@yt.io',  action: 'user_suspended',     target: 'Dan Cooper',     details: 'Terms violation' },
   { ts: '2026-06-14 13:22:09', admin: 'admin@yt.io',  action: 'credit_granted',     target: 'Priya Sharma',   details: '+50 credits' },
   { ts: '2026-06-14 12:15:44', admin: 'admin@yt.io',  action: 'container_drained',  target: 'app-4001',       details: 'Scheduled maintenance' },
