@@ -214,11 +214,11 @@ export const KB_ARTICLES: KBArticle[] = [
       },
       {
         heading: 'Understand the Pro plan',
-        body: 'Pro is designed for content creators and students. It includes:\n- 100 transcripts per month\n- TXT and PDF export\n- Folder organisation\n- Unlimited transcript retention\n- Share links',
+        body: 'Pro is designed for content creators and students. It includes:\n- 10 transcripts per month\n- TXT and PDF export\n- Folder organisation\n- Unlimited transcript retention\n- Share links',
       },
       {
         heading: 'Understand the Studio plan',
-        body: 'Studio is for power users and small teams. It includes:\n- 300 transcripts per month\n- TXT, PDF, and SRT export\n- Folder organisation and sharing\n- Notes on transcripts\n- Share links with all expiry options including Never\n- Priority processing queue',
+        body: 'Studio is for power users and small teams. It includes:\n- 40 transcripts per month\n- TXT, PDF, and SRT export\n- Folder organisation and sharing\n- Notes on transcripts\n- Share links with all expiry options including Never\n- Priority processing queue',
       },
       {
         heading: 'Understand the Enterprise plan',
