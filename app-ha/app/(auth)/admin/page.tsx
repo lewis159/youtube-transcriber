@@ -1,6 +1,8 @@
 import { unstable_cache } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase'
 import AdminQuickLinks from './AdminQuickLinks'
+import AdminQuickActions from './AdminQuickActions'
+import AnnouncementBanner from './AnnouncementBanner'
 
 // ── Cached aggregate admin stats (non-user-specific, no auth state) ──────────
 const getOverviewStats = unstable_cache(
@@ -44,10 +46,10 @@ export default async function AdminOverviewPage() {
     n == null ? '—' : n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(n)
 
   const stats = [
-    { label: 'Total Users',      value: fmtNum(totalUsers),   sub: 'All registered accounts', color: '#E53935', subColor: '#888' },
-    { label: 'Organisations',    value: '—',                   sub: 'Org data coming soon',    color: '#22c55e', subColor: '#888' },
-    { label: 'Total Videos',     value: fmtNum(totalVideos),  sub: 'All submitted videos',    color: '#60a5fa', subColor: '#22c55e' },
-    { label: 'Transcripts Done', value: fmtNum(doneCount),    sub: `${successRate}% success rate`, color: '#a78bfa', subColor: '#888' },
+    { label: 'Total Users',      value: fmtNum(totalUsers),   sub: 'All registered accounts', color: '#E53935', subColor: '#888',    href: '/admin/users' },
+    { label: 'Organisations',    value: '—',                   sub: 'Org data coming soon',    color: '#22c55e', subColor: '#888',    href: '/admin/organisations' },
+    { label: 'Total Videos',     value: fmtNum(totalVideos),  sub: 'All submitted videos',    color: '#60a5fa', subColor: '#22c55e', href: '/admin/containers' },
+    { label: 'Transcripts Done', value: fmtNum(doneCount),    sub: `${successRate}% success rate`, color: '#a78bfa', subColor: '#888', href: '/admin/containers' },
   ]
 
   const recentUsers = (recentUsersRaw ?? []).map(u => ({
@@ -60,11 +62,11 @@ export default async function AdminOverviewPage() {
   }))
 
   const activity = [
-    { icon: '👤', text: 'James Walker signed up — Starter trial started',   time: '2 min ago',   color: '#22c55e' },
-    { icon: '💳', text: 'Tom Hughes upgraded to Pro — £9.00 charged',        time: '14 min ago',  color: '#22c55e' },
-    { icon: '⚠️', text: 'Dan Cooper payment failed — card declined',         time: '1 hr ago',    color: '#E53935' },
-    { icon: '🎬', text: '182 new transcripts processed today',                time: '3 hrs ago',   color: '#60a5fa' },
-    { icon: '🏢', text: 'Acme Productions added 3 new seats',                time: '5 hrs ago',   color: '#888' },
+    { icon: '👤', text: 'James Walker signed up — Starter trial started',   time: '2 min ago',   color: '#22c55e', href: '/admin/users' },
+    { icon: '💳', text: 'Tom Hughes upgraded to Pro — £9.00 charged',        time: '14 min ago',  color: '#22c55e', href: '/admin/billing' },
+    { icon: '⚠️', text: 'Dan Cooper payment failed — card declined',         time: '1 hr ago',    color: '#E53935', href: '/admin/billing' },
+    { icon: '🎬', text: '182 new transcripts processed today',                time: '3 hrs ago',   color: '#60a5fa', href: '/admin/containers' },
+    { icon: '🏢', text: 'Acme Productions added 3 new seats',                time: '5 hrs ago',   color: '#888',    href: '/admin/organisations' },
   ]
 
   const tierBadge = (tier: string) => {
@@ -95,6 +97,9 @@ export default async function AdminOverviewPage() {
 
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh', color: 'var(--text-primary)' }}>
+      {/* Site-wide active announcement banner (admin-only for now) */}
+      <AnnouncementBanner />
+
       {/* Sub-bar */}
       <div style={{
         background: '#0d0d0d', borderBottom: '0.5px solid #1e1e1e',
@@ -114,12 +119,14 @@ export default async function AdminOverviewPage() {
 
         {/* Stat cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-          {stats.map(({ label, value, sub, color, subColor }) => (
-            <div key={label} style={{ background: '#0d0d0d', border: '0.5px solid #1e1e1e', borderRadius: '8px', padding: '20px', borderTop: `2px solid ${color}` }}>
-              <div style={{ fontSize: '11px', color: '#555', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
-              <div style={{ fontSize: '28px', fontWeight: 500, marginBottom: '6px' }}>{value}</div>
-              <div style={{ fontSize: '11px', color: subColor }}>{sub}</div>
-            </div>
+          {stats.map(({ label, value, sub, color, subColor, href }) => (
+            <a key={label} href={href} style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div style={{ background: '#0d0d0d', border: '0.5px solid #1e1e1e', borderRadius: '8px', padding: '20px', borderTop: `2px solid ${color}`, height: '100%' }}>
+                <div style={{ fontSize: '11px', color: '#555', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+                <div style={{ fontSize: '28px', fontWeight: 500, marginBottom: '6px' }}>{value}</div>
+                <div style={{ fontSize: '11px', color: subColor }}>{sub}</div>
+              </div>
+            </a>
           ))}
         </div>
 
@@ -162,10 +169,11 @@ export default async function AdminOverviewPage() {
           <div style={{ background: '#0d0d0d', border: '0.5px solid #1e1e1e', borderRadius: '8px', padding: '16px' }}>
             <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '16px' }}>Activity Feed</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-              {activity.map(({ icon, text, time, color }, i) => (
-                <div key={i} style={{
+              {activity.map(({ icon, text, time, color, href }, i) => (
+                <a key={i} href={href} style={{
                   display: 'flex', gap: '12px', padding: '12px 0',
                   borderBottom: i < activity.length - 1 ? '0.5px solid #141414' : 'none',
+                  textDecoration: 'none', color: 'inherit',
                 }}>
                   <div style={{
                     width: '32px', height: '32px', borderRadius: '8px',
@@ -179,11 +187,14 @@ export default async function AdminOverviewPage() {
                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>{text}</div>
                     <div style={{ fontSize: '11px', color: '#444', marginTop: '4px' }}>{time}</div>
                   </div>
-                </div>
+                </a>
               ))}
             </div>
           </div>
         </div>
+
+        {/* Quick actions (Broadcast / Drain) */}
+        <AdminQuickActions />
 
         {/* Quick links */}
         <AdminQuickLinks />
