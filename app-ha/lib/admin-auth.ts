@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { redirect } from 'next/navigation'
 
 // Service-role client — never exposed to the browser
 function getServiceClient() {
@@ -43,4 +44,36 @@ export async function requireAdmin(): Promise<NextResponse | null> {
   }
 
   return null
+}
+
+/**
+ * Call at the top of a server component / layout that guards admin PAGES.
+ * Redirects to /dashboard if the caller isn't a signed-in global_admin.
+ * Mirrors the dev-bypass behaviour of requireAdmin (no role check when
+ * Supabase credentials aren't configured).
+ */
+export async function requireGlobalAdminPage(): Promise<void> {
+  const { userId } = await auth()
+
+  if (!userId) {
+    redirect('/dashboard')
+  }
+
+  // Skip role check if Supabase credentials aren't configured (dev with no DB)
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+  if (!url || url.includes('placeholder')) {
+    return
+  }
+
+  const supabase = getServiceClient()
+
+  const { data: user, error } = await supabase
+    .from('users')
+    .select('role')
+    .eq('clerk_user_id', userId)
+    .single()
+
+  if (error || !user || user.role !== 'global_admin') {
+    redirect('/dashboard')
+  }
 }
