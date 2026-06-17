@@ -16,6 +16,14 @@ import {
   type TranscriptSegment,
 } from '@/lib/claude'
 import { getProvider, localChatStream, type AiProviderPref } from '@/lib/llm'
+import { checkRateLimit } from '@/lib/rate-limit'
+
+// ── Abuse/cost guardrail (HA-safe, Redis-backed) ─────────────────────────────
+// Per-user chat throttle. Shared across replicas via Redis so it holds behind
+// the load balancer. Tunable. Generous enough for normal use; backstops runaway
+// scripts / cost abuse.
+const CHAT_RATE_LIMIT = 30 // messages
+const CHAT_RATE_WINDOW_SECONDS = 60 * 60 // per hour, per user
 
 // ── Q&A chat over a transcript — additive, flag-gated on `summary_chat` ───────
 // (default OFF, returns the same 403 `upgrade_required` shape as the export and
@@ -100,6 +108,20 @@ export async function POST(
     const question = (body.question ?? '').trim()
     if (!question) {
       return NextResponse.json({ error: 'Question is required' }, { status: 400 })
+    }
+
+    // Per-user chat rate limit (HA-safe, fails open). Enforced before we do any
+    // model work so abuse can't run up cost. Keyed by Clerk user id.
+    const rate = await checkRateLimit(
+      `chat:${userId}`,
+      CHAT_RATE_LIMIT,
+      CHAT_RATE_WINDOW_SECONDS
+    )
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: 'rate_limited', scope: 'chat', resetSeconds: rate.resetSeconds },
+        { status: 429 }
+      )
     }
 
     // Keep history short + well-typed (stateless: bounded prior turns).
