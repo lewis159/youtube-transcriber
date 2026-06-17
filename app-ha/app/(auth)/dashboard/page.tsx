@@ -98,6 +98,9 @@ export default function DashboardPage() {
   const [formError, setFormError] = useState<FormError | null>(null)
   const [exportingId, setExportingId] = useState<string | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  // Per-video retry: which video is mid-retry, and any inline retry error.
+  const [retryingId, setRetryingId] = useState<string | null>(null)
+  const [retryError, setRetryError] = useState<{ id: string; message: string } | null>(null)
 
   // AI model preference (summaries + Q&A chat). Defaults to 'local'.
   const [aiProvider, setAiProvider] = useState<AiProvider>('local')
@@ -224,6 +227,31 @@ export default function DashboardPage() {
     } catch (e) {
       console.error(e)
       alert('Failed to delete video. Please try again.')
+    }
+  }
+
+  // Re-run transcription for an EXISTING video (no new row). The backend resets
+  // the same row back to processing/queued; the status poller above then flips
+  // the card through to Ready on its own.
+  async function handleRetry(videoId: string) {
+    setRetryError(null)
+    try {
+      setRetryingId(videoId)
+      const res = await fetch(`/api/videos/${videoId}/retry`, { method: 'POST' })
+      if (!res.ok) {
+        // 409 = already running; treat as a no-op refresh, anything else is an error.
+        if (res.status !== 409) {
+          setRetryError({ id: videoId, message: 'Couldn’t restart transcription. Please try again.' })
+        }
+        return
+      }
+      // Pull the reset status immediately, then let polling carry it to Ready.
+      await loadVideos({ silent: true })
+    } catch (e) {
+      console.error(e)
+      setRetryError({ id: videoId, message: 'Couldn’t reach the server — please try again.' })
+    } finally {
+      setRetryingId(null)
     }
   }
 
@@ -543,6 +571,11 @@ export default function DashboardPage() {
                       {new Date(video.created_at).toLocaleDateString()}
                     </span>
                   </div>
+                  {retryError?.id === video.id && (
+                    <div role="alert" style={{ marginTop: '6px', fontSize: '12px', color: 'var(--accent)' }}>
+                      {retryError.message}
+                    </div>
+                  )}
                 </div>
 
                 {/* Actions */}
@@ -565,6 +598,29 @@ export default function DashboardPage() {
                   >
                     ▶ Watch
                   </a>
+
+                  {/* Retry — re-run transcription for this same video. Shown only
+                      for terminal states (error = recovery, completed = re-run). */}
+                  {(video.status === 'error' || video.status === 'completed') && (
+                    <button
+                      onClick={() => handleRetry(video.id)}
+                      disabled={retryingId === video.id}
+                      title={video.status === 'error' ? 'Retry transcription' : 'Re-run transcription'}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: '6px',
+                        background: video.status === 'error' ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
+                        border: `1px solid ${video.status === 'error' ? 'var(--accent-border)' : 'var(--border-subtle)'}`,
+                        color: video.status === 'error' ? 'var(--accent)' : 'var(--text-secondary)',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: retryingId === video.id ? 'not-allowed' : 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {retryingId === video.id ? 'Retrying…' : '↻ Retry'}
+                    </button>
+                  )}
 
                   {/* Export dropdown */}
                   <div style={{ position: 'relative' }}>
