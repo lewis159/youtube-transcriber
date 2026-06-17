@@ -122,6 +122,8 @@ export const EVENTS = {
   video_added: 'video_added',
   queued: 'queued',
   sync_started: 'sync_started',
+  // Retry — user re-runs transcription for an EXISTING video (no new row)
+  retry: 'retry',
   // Transcription pipeline (worker)
   extracting_audio: 'extracting_audio',
   audio_extracted: 'audio_extracted',
