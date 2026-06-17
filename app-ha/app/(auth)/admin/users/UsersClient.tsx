@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -17,8 +16,20 @@ export type User = {
   role: string
 }
 
+export type Org = {
+  id: string
+  name: string
+  tier: string
+  members: number
+  admin: string
+  seatsUsed: number
+  seatsTotal: number
+  created: string
+}
+
 const TIERS = ['Starter', 'Pro', 'Studio', 'Enterprise']
-const STATUSES = ['Active', 'Trial', 'Suspended']
+// Status is derived from is_trial — no Suspended state exists in the DB.
+const STATUSES = ['Active', 'Trial']
 const ROLES = ['user', 'org_admin', 'support', 'global_admin']
 
 // ─── Badge helpers ─────────────────────────────────────────────────────────────
@@ -142,8 +153,10 @@ function UserEditPanel({ user, onClose, onSave, onDelete }: { user: User; onClos
 
 // ─── Main client component ────────────────────────────────────────────────────
 
-export default function UsersAndOrgsClient({ initialUsers }: { initialUsers: User[] }) {
+export default function UsersAndOrgsClient({ initialUsers, initialOrgs }: { initialUsers: User[]; initialOrgs: Org[] }) {
   const [users, setUsers] = useState<User[]>(initialUsers)
+  const [orgs] = useState<Org[]>(initialOrgs)
+  const [tab, setTab] = useState<'users' | 'orgs'>('users')
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -170,22 +183,6 @@ export default function UsersAndOrgsClient({ initialUsers }: { initialUsers: Use
     } catch (e: any) {
       setUsers(prev) // rollback
       setError(e.message)
-    }
-  }
-
-  async function handleToggleSuspend(user: User) {
-    const next = user.status === 'Suspended' ? 'Active' : 'Suspended'
-    const prev = users
-    setBusyId(user.id)
-    setUsers(p => p.map(u => u.id === user.id ? { ...u, status: next } : u))
-    setError(null)
-    try {
-      await patchUser(user.id, { status: next })
-    } catch (e: any) {
-      setUsers(prev)
-      setError(e.message)
-    } finally {
-      setBusyId(null)
     }
   }
 
@@ -225,7 +222,7 @@ export default function UsersAndOrgsClient({ initialUsers }: { initialUsers: Use
         justifyContent: 'space-between', position: 'sticky', top: '60px', zIndex: 50,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 500 }}>Users</span>
+          <span style={{ fontSize: '13px', fontWeight: 500 }}>Users &amp; Organisations</span>
           <span style={{ fontSize: '11px', color: '#E53935', fontFamily: 'monospace', background: 'rgba(229,57,53,0.08)', border: '0.5px solid rgba(229,57,53,0.2)', padding: '2px 8px', borderRadius: '4px' }}>ALPHA</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -244,29 +241,42 @@ export default function UsersAndOrgsClient({ initialUsers }: { initialUsers: Use
               {roleCounts.org_admin} Org Admin{roleCounts.org_admin !== 1 ? 's' : ''}
             </span>
           )}
-          <button style={{ fontSize: '13px', padding: '6px 14px', borderRadius: '6px', background: '#E53935', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
-            + Add user
-          </button>
+          {tab === 'users' && (
+            <button style={{ fontSize: '13px', padding: '6px 14px', borderRadius: '6px', background: '#E53935', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+              + Add user
+            </button>
+          )}
         </div>
       </div>
 
-      <div style={{ padding: '24px' }}>
-        {/* Cross-links to the canonical standalone admin pages */}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-          <Link href="/admin/organisations" style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'transparent', border: '0.5px solid #2a2a2a', color: 'var(--text-secondary)', textDecoration: 'none' }}>
-            Organisations →
-          </Link>
-          <Link href="/admin/feature-flags" style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'transparent', border: '0.5px solid #2a2a2a', color: 'var(--text-secondary)', textDecoration: 'none' }}>
-            Feature Flags →
-          </Link>
-        </div>
+      {/* Tab strip */}
+      <div style={{
+        background: '#0d0d0d', borderBottom: '0.5px solid #1e1e1e',
+        padding: '0 24px', display: 'flex', gap: '4px',
+        position: 'sticky', top: '108px', zIndex: 49,
+      }}>
+        {([['users', `Users (${users.length})`], ['orgs', `Organisations (${orgs.length})`]] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setTab(key)}
+            style={{
+              fontSize: '13px', padding: '12px 14px', background: 'transparent',
+              border: 'none', cursor: 'pointer', fontWeight: tab === key ? 600 : 400,
+              color: tab === key ? 'var(--text-primary)' : '#666',
+              borderBottom: tab === key ? '2px solid #E53935' : '2px solid transparent',
+              marginBottom: '-1px',
+            }}>
+            {label}
+          </button>
+        ))}
+      </div>
 
+      <div style={{ padding: '24px' }}>
         {error && (
           <div style={{ marginBottom: '16px', padding: '10px 14px', borderRadius: '6px', background: 'rgba(229,57,53,0.08)', border: '0.5px solid rgba(229,57,53,0.3)', color: '#E53935', fontSize: '12px' }}>
             {error}
           </div>
         )}
 
+        {tab === 'users' && (<>
         {/* Stat cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
           {[
@@ -291,7 +301,7 @@ export default function UsersAndOrgsClient({ initialUsers }: { initialUsers: Use
             <option>All tiers</option><option>Starter</option><option>Pro</option><option>Studio</option><option>Enterprise</option>
           </select>
           <select style={{ padding: '8px 12px', borderRadius: '6px', background: '#0d0d0d', border: '0.5px solid #2a2a2a', color: 'var(--text-secondary)', fontSize: '13px', outline: 'none' }}>
-            <option>All</option><option>Trial</option><option>Active</option><option>Suspended</option>
+            <option>All</option><option>Trial</option><option>Active</option>
           </select>
         </div>
 
@@ -306,6 +316,13 @@ export default function UsersAndOrgsClient({ initialUsers }: { initialUsers: Use
               </tr>
             </thead>
             <tbody>
+              {users.length === 0 && (
+                <tr>
+                  <td colSpan={7} style={{ padding: '40px 16px', textAlign: 'center', fontSize: '13px', color: '#555' }}>
+                    No users found.
+                  </td>
+                </tr>
+              )}
               {users.map((user, i) => (
                 <tr key={user.id} style={{ borderBottom: i < users.length - 1 ? '0.5px solid #141414' : 'none', opacity: busyId === user.id ? 0.5 : 1 }}>
                   <td style={{ padding: '12px 16px' }}>
@@ -332,17 +349,6 @@ export default function UsersAndOrgsClient({ initialUsers }: { initialUsers: Use
                         style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '4px', background: 'transparent', border: '0.5px solid #2a2a2a', color: 'var(--text-secondary)', cursor: 'pointer' }}>
                         Edit
                       </button>
-                      {user.status === 'Suspended' ? (
-                        <button onClick={() => handleToggleSuspend(user)} disabled={busyId === user.id}
-                          style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '4px', background: 'rgba(34,197,94,0.08)', border: '0.5px solid rgba(34,197,94,0.3)', color: '#22c55e', cursor: 'pointer' }}>
-                          Unsuspend
-                        </button>
-                      ) : (
-                        <button onClick={() => handleToggleSuspend(user)} disabled={busyId === user.id}
-                          style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '4px', background: 'transparent', border: '0.5px solid rgba(229,57,53,0.3)', color: '#E53935', cursor: 'pointer' }}>
-                          Suspend
-                        </button>
-                      )}
                       <button onClick={() => handleDeleteUser(user)} disabled={busyId === user.id}
                         style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '4px', background: 'transparent', border: '0.5px solid rgba(229,57,53,0.3)', color: '#E53935', cursor: 'pointer' }}>
                         Delete
@@ -354,6 +360,79 @@ export default function UsersAndOrgsClient({ initialUsers }: { initialUsers: Use
             </tbody>
           </table>
         </div>
+        </>)}
+
+        {tab === 'orgs' && (
+          orgs.length === 0 ? (
+            <div style={{ background: '#0d0d0d', border: '0.5px solid #1e1e1e', borderRadius: '8px', padding: '48px 24px', textAlign: 'center' }}>
+              <div style={{ fontSize: '32px', marginBottom: '12px' }}>🏢</div>
+              <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '6px' }}>No organisations yet</div>
+              <div style={{ fontSize: '12px', color: '#666', maxWidth: '360px', margin: '0 auto' }}>
+                Organisations appear here once Studio or Enterprise customers create teams. None exist in the database yet.
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Org stat cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
+                {[
+                  { label: 'Total Orgs',      value: String(orgs.length),                                           sub: 'Across all tiers', color: '#E53935', subColor: '#888' },
+                  { label: 'Enterprise Orgs', value: String(orgs.filter(o => o.tier === 'Enterprise').length),      sub: 'Top tier',         color: '#333',    subColor: '#888' },
+                  { label: 'Total Seats',     value: String(orgs.reduce((n, o) => n + o.seatsTotal, 0)),            sub: 'Provisioned',      color: '#22c55e', subColor: '#22c55e' },
+                ].map(({ label, value, sub, color, subColor }) => (
+                  <div key={label} style={{ background: '#0d0d0d', border: '0.5px solid #1e1e1e', borderRadius: '8px', padding: '16px', borderTop: `2px solid ${color}` }}>
+                    <div style={{ fontSize: '11px', color: '#555', marginBottom: '8px' }}>{label}</div>
+                    <div style={{ fontSize: '26px', fontWeight: 500, marginBottom: '4px' }}>{value}</div>
+                    <div style={{ fontSize: '11px', color: subColor }}>{sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Org cards grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                {orgs.map((org) => {
+                  const seatPct = org.seatsTotal > 0 ? Math.round((org.seatsUsed / org.seatsTotal) * 100) : 0
+                  return (
+                    <div key={org.id} style={{ background: '#0d0d0d', border: '0.5px solid #1e1e1e', borderRadius: '8px', padding: '20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
+                        <div>
+                          <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '6px' }}>{org.name}</div>
+                          {tierBadge(org.tier)}
+                        </div>
+                        <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#1a1a1a', border: '0.5px solid #2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
+                          🏢
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '20px', marginBottom: '16px' }}>
+                        <div>
+                          <div style={{ fontSize: '11px', color: '#555', marginBottom: '2px' }}>Members</div>
+                          <div style={{ fontSize: '13px', fontWeight: 500 }}>{org.members}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '11px', color: '#555', marginBottom: '2px' }}>Org Admin</div>
+                          <div style={{ fontSize: '13px', fontWeight: 500 }}>{org.admin}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '11px', color: '#555', marginBottom: '2px' }}>Created</div>
+                          <div style={{ fontSize: '13px', fontWeight: 500 }}>{org.created}</div>
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '11px', color: '#555' }}>Seat usage</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{org.seatsUsed}/{org.seatsTotal} seats</span>
+                        </div>
+                        <div style={{ height: '4px', background: '#1a1a1a', borderRadius: '2px', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${seatPct}%`, background: seatPct > 80 ? '#E53935' : '#22c55e', borderRadius: '2px' }} />
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )
+        )}
       </div>
 
       {/* Slide-over panel */}

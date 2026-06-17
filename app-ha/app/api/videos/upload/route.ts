@@ -249,6 +249,23 @@ export async function POST(request: NextRequest) {
 
     const message = error instanceof Error ? error.message : 'Failed to process video'
 
+    // Lifecycle log: upload failed. (logEvent never throws — safe in the catch.)
+    // userId may be unavailable if auth() itself threw; resolve it best-effort.
+    let errUserId: string | undefined
+    try {
+      errUserId = (await auth()).userId ?? undefined
+    } catch {
+      errUserId = undefined
+    }
+    await logEvent({
+      level: 'error',
+      event: EVENTS.error,
+      videoId: video?.id,
+      userId: errUserId,
+      message,
+      metadata: { stage: 'upload' },
+    })
+
     return NextResponse.json(
       {
         error: message,

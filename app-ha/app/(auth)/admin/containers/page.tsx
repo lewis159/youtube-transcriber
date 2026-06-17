@@ -127,6 +127,8 @@ export default function ContainersPage() {
   const [allContainers, setAllContainers] = useState<DockerContainer[]>([])
   const [showAll, setShowAll]             = useState(false)
   const [error, setError]                 = useState<string | null>(null)
+  const [errorReason, setErrorReason]     = useState<'unreachable' | 'error' | null>(null)
+  const [errorTarget, setErrorTarget]     = useState<string>('')
   const [lastUpdated, setLastUpdated]     = useState('')
   const [loading, setLoading]             = useState(true)
   const [pending, setPending]             = useState<PendingAction | null>(null)
@@ -138,17 +140,22 @@ export default function ContainersPage() {
   const fetchContainers = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/containers')
-      if (res.status === 503) {
-        const data = await res.json()
-        setError(data.error || 'Docker socket unavailable')
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error || 'Docker endpoint unavailable')
+        setErrorReason(data.reason === 'error' ? 'error' : 'unreachable')
+        setErrorTarget(data.target || '')
         return
       }
       const data = await res.json()
       setAllContainers(data.containers ?? [])
       setError(null)
+      setErrorReason(null)
       setLastUpdated(new Date().toLocaleTimeString())
     } catch {
-      setError('Failed to reach container API')
+      setError('Failed to reach the container API (the Next.js app itself did not respond).')
+      setErrorReason('error')
+      setErrorTarget('')
     } finally {
       setLoading(false)
     }
@@ -371,15 +378,48 @@ export default function ContainersPage() {
         )}
 
         {error && !loading && (
-          <div style={{ background: 'rgba(229,57,53,0.06)', border: '0.5px solid rgba(229,57,53,0.2)', borderRadius: '8px', padding: '24px', textAlign: 'center' }}>
-            <div style={{ fontSize: '24px', marginBottom: '12px' }}>🔌</div>
-            <div style={{ fontSize: '14px', fontWeight: 600, color: '#E53935', marginBottom: '8px' }}>Docker socket unavailable</div>
-            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{error}</div>
-            <div style={{ fontSize: '12px', color: '#555', marginTop: '8px' }}>
-              The app reaches Docker through the <code style={{ fontFamily: 'monospace', color: '#888' }}>docker-socket-proxy</code> service
-              (<code style={{ fontFamily: 'monospace', color: '#888' }}>DOCKER_HOST=tcp://docker-socket-proxy:2375</code>).
-              Ensure that proxy is running on the same network — or, for local dev only, mount <code style={{ fontFamily: 'monospace', color: '#888' }}>/var/run/docker.sock</code> into the app.
+          <div style={{
+            background: errorReason === 'unreachable' ? 'rgba(234,179,8,0.06)' : 'rgba(229,57,53,0.06)',
+            border: `0.5px solid ${errorReason === 'unreachable' ? 'rgba(234,179,8,0.25)' : 'rgba(229,57,53,0.2)'}`,
+            borderRadius: '8px', padding: '24px', textAlign: 'center',
+          }}>
+            <div style={{ fontSize: '24px', marginBottom: '12px' }}>
+              {errorReason === 'unreachable' ? '🔌' : '⚠️'}
             </div>
+            <div style={{
+              fontSize: '14px', fontWeight: 600, marginBottom: '8px',
+              color: errorReason === 'unreachable' ? '#eab308' : '#E53935',
+            }}>
+              {errorReason === 'unreachable'
+                ? 'Docker proxy not reachable (deploy dependency)'
+                : 'Error talking to Docker'}
+            </div>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{error}</div>
+
+            {errorReason === 'unreachable' ? (
+              <div style={{ fontSize: '12px', color: '#555', marginTop: '12px', lineHeight: 1.6, textAlign: 'left', maxWidth: '620px', margin: '12px auto 0' }}>
+                This is an <strong style={{ color: '#888' }}>environment / deploy</strong> issue, not an app bug. The app reaches
+                Docker through the <code style={{ fontFamily: 'monospace', color: '#888' }}>docker-socket-proxy</code> service
+                (<code style={{ fontFamily: 'monospace', color: '#888' }}>DOCKER_HOST=tcp://docker-socket-proxy:2375</code>).
+                {errorTarget && (
+                  <> Tried: <code style={{ fontFamily: 'monospace', color: '#888' }}>{errorTarget}</code>.</>
+                )}
+                <br /><br />
+                To fix: deploy the <code style={{ fontFamily: 'monospace', color: '#888' }}>docker-socket-proxy</code> service
+                from <code style={{ fontFamily: 'monospace', color: '#888' }}>docker-compose.prod.yml</code> and make sure it is on the
+                same Docker network as this app — or, for local dev only, mount
+                <code style={{ fontFamily: 'monospace', color: '#888' }}> /var/run/docker.sock</code> into the app container.
+              </div>
+            ) : (
+              <div style={{ fontSize: '12px', color: '#555', marginTop: '12px', lineHeight: 1.6, textAlign: 'left', maxWidth: '620px', margin: '12px auto 0' }}>
+                The proxy responded but returned an unexpected result.
+                {errorTarget && (
+                  <> Target: <code style={{ fontFamily: 'monospace', color: '#888' }}>{errorTarget}</code>.</>
+                )}
+                {' '}Check the <code style={{ fontFamily: 'monospace', color: '#888' }}>docker-socket-proxy</code> permissions
+                (it must allow <code style={{ fontFamily: 'monospace', color: '#888' }}>CONTAINERS=1</code>) and the app logs.
+              </div>
+            )}
           </div>
         )}
 

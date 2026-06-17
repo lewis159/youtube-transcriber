@@ -16,6 +16,7 @@ import {
   type TranscriptSegment,
 } from '@/lib/claude'
 import type { AiProviderPref } from '@/lib/llm'
+import { logEvent, EVENTS } from '@/lib/event-log'
 
 // ── AI summary route — additive, flag-gated on `ai_summary` (default OFF) ─────
 //
@@ -119,17 +120,23 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Captured for the catch-block error log (declared inside try otherwise).
+  let videoId: string | undefined
+  let logUserId: string | undefined
+
   try {
     const { userId } = await auth()
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    logUserId = userId
 
     if (!(await checkUserFeature(userId, 'ai_summary'))) {
       return NextResponse.json(upgradeRequired('ai_summary'), { status: 403 })
     }
 
     const { id } = await params
+    videoId = id
 
     // Verify ownership — throws if video not found or belongs to another user.
     try {
@@ -186,7 +193,31 @@ export async function POST(
     // Resolve tier → model and the user's provider preference, then summarise.
     const tier = await getUserTier(userId)
     const aiProvider = await getAiProvider(userId)
+
+    // Lifecycle log: AI summary generation about to start.
+    await logEvent({
+      event: EVENTS.summary_started,
+      videoId: id,
+      userId,
+      metadata: { provider: aiProvider, tier, chars: plainText.length },
+    })
+
     const result = await summariseTranscript(plainText, tier, aiProvider)
+
+    // Lifecycle log: AI summary generated successfully.
+    await logEvent({
+      event: EVENTS.summary_completed,
+      videoId: id,
+      userId,
+      metadata: {
+        provider: aiProvider,
+        tier,
+        model: result.model,
+        chars: plainText.length,
+        keyPoints: Array.isArray(result.keyPoints) ? result.keyPoints.length : 0,
+        chapters: Array.isArray(result.chapters) ? result.chapters.length : 0,
+      },
+    })
 
     // Persist. video_id is UNIQUE; on a race the insert conflicts — fall back to
     // returning whatever is now cached so the caller still gets a summary.
@@ -219,6 +250,17 @@ export async function POST(
     return NextResponse.json({ ...serialiseSummary(inserted), cached: false })
   } catch (error) {
     console.error('Summary POST error:', error)
+
+    // Lifecycle log: summary generation/persistence failed. (logEvent never throws.)
+    await logEvent({
+      level: 'error',
+      event: EVENTS.error,
+      videoId,
+      userId: logUserId,
+      message: error instanceof Error ? error.message : 'Failed to generate summary',
+      metadata: { stage: 'summary' },
+    })
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to generate summary' },
       { status: 500 }

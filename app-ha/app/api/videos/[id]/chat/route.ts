@@ -17,6 +17,7 @@ import {
 } from '@/lib/claude'
 import { getProvider, localChatStream, type AiProviderPref } from '@/lib/llm'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { logEvent, EVENTS } from '@/lib/event-log'
 
 // ── Abuse/cost guardrail (HA-safe, Redis-backed) ─────────────────────────────
 // Per-user chat throttle. Shared across replicas via Redis so it holds behind
@@ -77,11 +78,16 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Captured for the catch-block error log (declared inside try otherwise).
+  let videoId: string | undefined
+  let logUserId: string | undefined
+
   try {
     const { userId } = await auth()
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    logUserId = userId
 
     // Gate on summary_chat (default OFF) — same shape as export/summary routes.
     if (!(await checkUserFeature(userId, 'summary_chat'))) {
@@ -89,6 +95,7 @@ export async function POST(
     }
 
     const { id } = await params
+    videoId = id
 
     // Verify ownership — throws if video not found or belongs to another user.
     try {
@@ -160,6 +167,21 @@ export async function POST(
     const aiProvider = await getAiProvider(userId)
     const provider = getProvider(aiProvider)
 
+    // Lifecycle log: a chat question is being answered. Logged before streaming
+    // begins so even an immediate stream failure still has its question recorded.
+    await logEvent({
+      event: EVENTS.chat_message,
+      videoId: id,
+      userId,
+      metadata: {
+        provider,
+        tier,
+        model: provider === 'local' ? null : model,
+        questionLength: question.length,
+        historyTurns: history.length,
+      },
+    })
+
     const systemPrompt =
       'You answer questions about a specific YouTube video using ONLY its ' +
       'transcript below. Each line is prefixed with its [MM:SS] timestamp. ' +
@@ -205,6 +227,15 @@ export async function POST(
           controller.close()
         } catch (err) {
           console.error('Chat stream error:', err)
+          // Lifecycle log: generation failed mid-stream. (logEvent never throws.)
+          await logEvent({
+            level: 'error',
+            event: EVENTS.error,
+            videoId: id,
+            userId,
+            message: err instanceof Error ? err.message : 'Chat generation failed',
+            metadata: { stage: 'chat', provider },
+          })
           // Surface a short error to the client stream, then close.
           try {
             controller.enqueue(
@@ -227,6 +258,17 @@ export async function POST(
     })
   } catch (error) {
     console.error('Chat error:', error)
+
+    // Lifecycle log: chat request failed before streaming. (logEvent never throws.)
+    await logEvent({
+      level: 'error',
+      event: EVENTS.error,
+      videoId,
+      userId: logUserId,
+      message: error instanceof Error ? error.message : 'Chat failed',
+      metadata: { stage: 'chat' },
+    })
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Chat failed' },
       { status: 500 }
