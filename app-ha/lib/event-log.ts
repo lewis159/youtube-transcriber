@@ -118,13 +118,23 @@ export async function logEvent(entry: EventLogEntry): Promise<void> {
 
 /** Canonical lifecycle event names — shared vocabulary for app + worker. */
 export const EVENTS = {
+  // Upload / queueing (app)
   video_added: 'video_added',
   queued: 'queued',
   sync_started: 'sync_started',
+  // Transcription pipeline (worker)
   extracting_audio: 'extracting_audio',
+  audio_extracted: 'audio_extracted',
+  captions_checked: 'captions_checked',
   captions_found: 'captions_found',
   whisper_fallback: 'whisper_fallback',
   transcribing: 'transcribing',
   completed: 'completed',
+  // AI summary (app)
+  summary_started: 'summary_started',
+  summary_completed: 'summary_completed',
+  // AI chat (app)
+  chat_message: 'chat_message',
+  // Universal failure event
   error: 'error',
 } as const

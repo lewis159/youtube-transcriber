@@ -36,7 +36,10 @@ type AiSaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 // Turn an upload API failure into a friendly, actionable message — never surface
 // raw codes like "upgrade_required" to the user.
-function describeUploadError(status: number, body: { error?: string; feature?: string }): FormError {
+function describeUploadError(
+  status: number,
+  body: { error?: string; feature?: string; limit?: number; used?: number }
+): FormError {
   const code = body?.error
 
   if (status === 403 && code === 'upgrade_required') {
@@ -55,6 +58,20 @@ function describeUploadError(status: number, body: { error?: string; feature?: s
   }
   if (status === 401) {
     return { message: 'Your session has expired — please refresh and sign in again.' }
+  }
+  if (status === 429 && code === 'quota_exceeded') {
+    const n = typeof body?.limit === 'number' ? body.limit : undefined
+    return {
+      message: n
+        ? `You’ve used all ${n} transcriptions on your plan this month.`
+        : 'You’ve used all your transcriptions on your plan this month.',
+      action: { label: 'View plans', href: '/pricing' },
+    }
+  }
+  if (status === 429 && code === 'rate_limited') {
+    return {
+      message: 'You’re doing that a bit too quickly — please wait a moment and try again.',
+    }
   }
   if (status === 429) {
     return {

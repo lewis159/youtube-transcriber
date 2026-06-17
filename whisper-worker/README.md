@@ -44,6 +44,45 @@ delete this directory and one compose file to remove it entirely (see
 
 ---
 
+## HA & horizontal scaling
+
+The worker is **safe to run as N replicas** and scales transcription throughput
+linearly. The repo-root `HA_NOTES.md` has the full design note; the essentials:
+
+- **Job distribution is Redis-side.** BullMQ takes a per-job lock in Redis, so
+  every replica atomically pulls a **distinct** job — two workers never process
+  the same video. `replicas: N` therefore means **N concurrent transcriptions**
+  (each replica stays `concurrency: 1`).
+- **No shared mutable state.** Scratch audio (`/cache/tmp`) is per-container;
+  DB writes are keyed by `video_id` and a job is only held by one worker at a
+  time; there is no cross-replica coordination.
+- **Model cache is per-node, not per-replica.** On Swarm the `whisper-cache`
+  named volume is a local volume created on whichever node a task lands on. The
+  **first job per node** downloads the model into that node's cache; later jobs
+  on the same node reuse it. The prod stack spreads replicas across nodes
+  (`deploy.placement.preferences: spread: node.id`) so each node warms its own
+  cache once.
+- **To scale:** raise `deploy.replicas` in `docker-compose.prod.yml`, or
+  `docker service scale <stack>_whisper-worker=N`. Limits are **per-replica**, so
+  ensure the cluster has `N ×` the CPU/mem budget free.
+
+### Redis Sentinel failover (honest limitation)
+
+In HA prod `REDIS_URL=sentinel://…`. The worker discovers the **current** master
+via Redis Sentinel **at connect time** and hands BullMQ a concrete
+`redis://<master>:<port>` URL (see `worker.py::_redis_connection()`).
+
+The Python BullMQ client (`bullmq==2.14.0`) does **not** speak Sentinel and
+cannot follow a master that moves at runtime. So this is correct master
+selection **at startup / after any restart**, but **not** transparent live
+failover. If Sentinel promotes a new master while the worker is running, the
+connection breaks and the process exits — and Swarm's
+`restart_policy: condition: on-failure` restarts it, re-discovering the new
+master on boot. That reconnect-on-restart is the pragmatic mitigation until the
+Python client gains native Sentinel support.
+
+---
+
 ## Job payload contract
 
 The app enqueues a BullMQ job to queue **`transcription`** with `job.data`:

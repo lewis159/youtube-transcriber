@@ -416,6 +416,15 @@ def process_job(payload):
                   user_id=user_id)
 
         captions = None if FORCE_WHISPER else fetch_youtube_captions(youtube_url)
+        # Record that the caption fast path was evaluated and what it found, so the
+        # branch decision (captions vs. whisper) is traceable even when none exist.
+        log_event(sb, "info", "captions_checked", video_id=video_id,
+                  user_id=user_id,
+                  metadata={
+                      "forced_whisper": bool(FORCE_WHISPER),
+                      "found": bool(captions),
+                      "segment_count": len(captions) if captions else 0,
+                  })
         if captions:
             save_transcript(
                 sb, video_id, captions,
@@ -447,6 +456,12 @@ def process_job(payload):
         extract_wav_from_url(youtube_url, wav_path)
 
         duration = wav_duration_seconds(wav_path)
+        # Audio is on disk — record extraction success + measured length so the
+        # transition into transcription is fully traceable.
+        log_event(sb, "info", "audio_extracted", video_id=video_id,
+                  user_id=user_id,
+                  metadata={"audio_duration": round(duration, 1),
+                            "max_audio_seconds": MAX_AUDIO_SECONDS})
         log.info("video %s audio duration=%.1fs (cap=%ds)",
                  video_id, duration, MAX_AUDIO_SECONDS)
         if duration > MAX_AUDIO_SECONDS:
@@ -485,7 +500,8 @@ def process_job(payload):
     except Exception as exc:  # noqa: BLE001
         log.exception("ERROR job videoId=%s: %s", video_id, exc)
         log_event(sb, "error", "error", video_id=video_id, user_id=user_id,
-                  message=str(exc))
+                  message=str(exc),
+                  metadata={"stage": "worker", "exc_type": type(exc).__name__})
         try:
             update_video_status(sb, video_id, "error")
         except Exception as e2:  # noqa: BLE001

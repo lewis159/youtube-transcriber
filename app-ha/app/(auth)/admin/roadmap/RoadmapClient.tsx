@@ -38,6 +38,66 @@ const CATEGORIES: { key: Category; label: string; description: string }[] = [
   { key: 'sentinel',  label: 'Op Security',      description: 'Operations & Security Console (Sentinel) — full build list' },
 ]
 
+function RoadmapItemCard({ item }: { item: RoadmapItem }) {
+  const ps = PRIORITY_STYLE[item.priority]
+  const ss = STATUS_STYLE[item.status]
+  const isComplete = item.status === 'completed'
+  return (
+    <div style={{
+      background: '#0d0d0d',
+      border: '0.5px solid #1e1e1e',
+      borderLeft: `3px solid ${ps.leftBorder}`,
+      borderRadius: '6px',
+      padding: '12px 16px',
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: '14px',
+      opacity: isComplete ? 0.6 : 1,
+    }}>
+      {/* ID */}
+      <span style={{ fontSize: '11px', color: '#444', fontFamily: 'monospace', flexShrink: 0, marginTop: '2px', width: '28px' }}>
+        #{item.id}
+      </span>
+
+      {/* Content */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+          <span style={{
+            fontSize: '13px', fontWeight: 600,
+            color: isComplete ? '#555' : 'var(--text-primary)',
+            textDecoration: isComplete ? 'line-through' : 'none',
+          }}>
+            {item.title}
+          </span>
+          {/* Priority badge */}
+          <span style={{
+            fontSize: '10px', fontWeight: 700, padding: '1px 7px', borderRadius: '3px',
+            color: ps.color, background: ps.bg, border: `0.5px solid ${ps.border}`,
+            flexShrink: 0,
+          }}>
+            {ps.label}
+          </span>
+        </div>
+        <p style={{ fontSize: '12px', color: '#555', margin: 0, lineHeight: '1.55' }}>
+          {item.description}
+        </p>
+      </div>
+
+      {/* Right side: status + date */}
+      <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+        <span style={{
+          fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '3px',
+          color: ss.color, background: ss.bg, border: `0.5px solid ${ss.border}`,
+          whiteSpace: 'nowrap',
+        }}>
+          {ss.label}
+        </span>
+        <span style={{ fontSize: '10px', color: '#444', fontFamily: 'monospace' }}>{item.updatedAt}</span>
+      </div>
+    </div>
+  )
+}
+
 export default function RoadmapClient({ roadmap }: { roadmap: RoadmapItem[] }) {
   const completed   = roadmap.filter(i => i.status === 'completed').length
   const total       = roadmap.length
@@ -205,9 +265,10 @@ export default function RoadmapClient({ roadmap }: { roadmap: RoadmapItem[] }) {
           </div>
         )}
 
-        {/* Category sections */}
+        {/* Category sections — active/planned items only; completed items are
+            grouped into a dedicated "Completed" section at the bottom. */}
         {CATEGORIES.map(({ key, label, description }) => {
-          const items = roadmap.filter(i => i.category === key && matches(i))
+          const items = roadmap.filter(i => i.category === key && i.status !== 'completed' && matches(i))
           // Hide a section entirely if it has no items under the active filters.
           if (items.length === 0) return null
           return (
@@ -231,69 +292,32 @@ export default function RoadmapClient({ roadmap }: { roadmap: RoadmapItem[] }) {
 
               {/* Items */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {items.map(item => {
-                  const ps = PRIORITY_STYLE[item.priority]
-                  const ss = STATUS_STYLE[item.status]
-                  const isComplete = item.status === 'completed'
-                  return (
-                    <div key={item.id} style={{
-                      background: '#0d0d0d',
-                      border: '0.5px solid #1e1e1e',
-                      borderLeft: `3px solid ${ps.leftBorder}`,
-                      borderRadius: '6px',
-                      padding: '12px 16px',
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '14px',
-                      opacity: isComplete ? 0.6 : 1,
-                    }}>
-                      {/* ID */}
-                      <span style={{ fontSize: '11px', color: '#444', fontFamily: 'monospace', flexShrink: 0, marginTop: '2px', width: '28px' }}>
-                        #{item.id}
-                      </span>
-
-                      {/* Content */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
-                          <span style={{
-                            fontSize: '13px', fontWeight: 600,
-                            color: isComplete ? '#555' : 'var(--text-primary)',
-                            textDecoration: isComplete ? 'line-through' : 'none',
-                          }}>
-                            {item.title}
-                          </span>
-                          {/* Priority badge */}
-                          <span style={{
-                            fontSize: '10px', fontWeight: 700, padding: '1px 7px', borderRadius: '3px',
-                            color: ps.color, background: ps.bg, border: `0.5px solid ${ps.border}`,
-                            flexShrink: 0,
-                          }}>
-                            {ps.label}
-                          </span>
-                        </div>
-                        <p style={{ fontSize: '12px', color: '#555', margin: 0, lineHeight: '1.55' }}>
-                          {item.description}
-                        </p>
-                      </div>
-
-                      {/* Right side: status + date */}
-                      <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
-                        <span style={{
-                          fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '3px',
-                          color: ss.color, background: ss.bg, border: `0.5px solid ${ss.border}`,
-                          whiteSpace: 'nowrap',
-                        }}>
-                          {ss.label}
-                        </span>
-                        <span style={{ fontSize: '10px', color: '#444', fontFamily: 'monospace' }}>{item.updatedAt}</span>
-                      </div>
-                    </div>
-                  )
-                })}
+                {items.map(item => <RoadmapItemCard key={item.id} item={item} />)}
               </div>
             </div>
           )
         })}
+
+        {/* Completed section — all completed items grouped at the bottom */}
+        {(() => {
+          const completedItems = roadmap.filter(i => i.status === 'completed' && matches(i))
+          if (completedItems.length === 0) return null
+          return (
+            <div style={{ marginBottom: '28px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 8px', margin: '0 -8px 12px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
+                  Completed
+                </span>
+                <span style={{ fontSize: '11px', color: '#333', whiteSpace: 'nowrap' }}>— shipped & done</span>
+                <div style={{ flex: 1, height: '0.5px', background: '#1e1e1e' }} />
+                <span style={{ fontSize: '11px', color: '#444', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{completedItems.length} items</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {completedItems.map(item => <RoadmapItemCard key={item.id} item={item} />)}
+              </div>
+            </div>
+          )
+        })()}
 
         <div style={{ fontSize: '11px', color: '#333', fontFamily: 'monospace', marginTop: '8px' }}>
           {roadmap.length} total items · last updated 2026-06-14 · global admin only

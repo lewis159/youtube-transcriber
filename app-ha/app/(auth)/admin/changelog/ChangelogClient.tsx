@@ -24,8 +24,18 @@ const btnDisabled: React.CSSProperties = {
 
 export default function ChangelogClient({ versions }: { versions: ChangelogEntry[] }) {
   const [page, setPage] = useState(1)
-  const totalPages = Math.ceil(versions.length / PER_PAGE)
-  const paginatedVersions = versions.slice((page - 1) * PER_PAGE, page * PER_PAGE)
+
+  // Render newest-first. Sort by date descending where dates are present,
+  // keeping entries without dates in their original (DB sort_order) position.
+  const sortedVersions = [...versions].sort((a, b) => {
+    if (a.date && b.date) return b.date.localeCompare(a.date)
+    if (a.date) return -1
+    if (b.date) return 1
+    return 0
+  })
+
+  const totalPages = Math.ceil(sortedVersions.length / PER_PAGE)
+  const paginatedVersions = sortedVersions.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh', color: 'var(--text-primary)' }}>

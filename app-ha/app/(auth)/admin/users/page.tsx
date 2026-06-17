@@ -1,5 +1,18 @@
 import { supabaseAdmin } from '@/lib/supabase'
-import UsersAndOrgsClient, { type User } from './UsersClient'
+import UsersAndOrgsClient, { type User, type Org } from './UsersClient'
+
+// The DB stores lowercase tier values (starter/pro/…); the UI uses labels.
+const TIER_LABELS: Record<string, string> = {
+  starter: 'Starter',
+  pro: 'Pro',
+  studio: 'Studio',
+  enterprise: 'Enterprise',
+}
+
+function tierLabel(tier: string | null): string {
+  if (!tier) return 'Starter'
+  return TIER_LABELS[tier] ?? (tier.charAt(0).toUpperCase() + tier.slice(1))
+}
 
 // Helper to derive initials from an email or name string
 function toInitials(str: string): string {
@@ -8,31 +21,83 @@ function toInitials(str: string): string {
   return str.slice(0, 2).toUpperCase()
 }
 
+function fmtDate(value: string | null): string {
+  if (!value) return '—'
+  return new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
 export default async function UsersAndOrgsPage() {
-  const { data: rows, error } = await supabaseAdmin
+  // ── Users ──────────────────────────────────────────────────────────────
+  // IMPORTANT: there is no `status` column on the users table — selecting it
+  // previously errored the whole query and produced an empty list. Status is
+  // derived from `is_trial` (Trial vs Active).
+  const { data: userRows, error: usersError } = await supabaseAdmin
     .from('users')
-    .select('id, email, tier, role, status, created_at')
+    .select('id, email, full_name, tier, role, is_trial, created_at')
     .order('created_at', { ascending: false })
 
-  if (error) {
-    console.error('[admin/users] Supabase fetch error:', error.message)
+  if (usersError) {
+    console.error('[admin/users] Supabase users fetch error:', usersError.message)
   }
 
-  const initialUsers: User[] = (rows ?? []).map(u => {
+  const initialUsers: User[] = (userRows ?? []).map((u) => {
     const email: string = u.email ?? ''
-    const localPart = email.split('@')[0] ?? 'Unknown'
+    const display = (u.full_name && u.full_name.trim()) || email.split('@')[0] || 'Unknown'
     return {
-      id:         u.id,
-      name:       localPart,
-      initials:   toInitials(localPart),
+      id: u.id,
+      name: display,
+      initials: toInitials(display),
       email,
-      tier:       u.tier    ?? 'Starter',
-      status:     u.status  ?? 'Active',
-      joined:     new Date(u.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      tier: tierLabel(u.tier),
+      status: u.is_trial ? 'Trial' : 'Active',
+      joined: fmtDate(u.created_at),
       lastActive: '—',
-      role:       u.role    ?? 'user',
+      role: u.role ?? 'user',
     }
   })
 
-  return <UsersAndOrgsClient initialUsers={initialUsers} />
+  // ── Organisations ──────────────────────────────────────────────────────
+  // Real data from the `organisations` table (British spelling per schema),
+  // with member/admin counts resolved from `org_members`.
+  const { data: orgRows, error: orgsError } = await supabaseAdmin
+    .from('organisations')
+    .select('id, name, tier, seat_limit, created_at')
+    .order('created_at', { ascending: false })
+
+  if (orgsError) {
+    console.error('[admin/users] Supabase organisations fetch error:', orgsError.message)
+  }
+
+  const orgIds = (orgRows ?? []).map((o) => o.id)
+  const memberCounts: Record<string, number> = {}
+  const orgAdmins: Record<string, string> = {}
+
+  if (orgIds.length > 0) {
+    const { data: members } = await supabaseAdmin
+      .from('org_members')
+      .select('org_id, org_role, users:user_id(email, full_name)')
+      .in('org_id', orgIds)
+
+    for (const m of members ?? []) {
+      const oid = (m as any).org_id as string
+      memberCounts[oid] = (memberCounts[oid] ?? 0) + 1
+      if ((m as any).org_role === 'org_admin' && !orgAdmins[oid]) {
+        const u = Array.isArray((m as any).users) ? (m as any).users[0] : (m as any).users
+        if (u) orgAdmins[oid] = u.full_name || u.email || '—'
+      }
+    }
+  }
+
+  const initialOrgs: Org[] = (orgRows ?? []).map((o) => ({
+    id: o.id,
+    name: o.name ?? 'Untitled organisation',
+    tier: tierLabel(o.tier),
+    members: memberCounts[o.id] ?? 0,
+    admin: orgAdmins[o.id] ?? '—',
+    seatsUsed: memberCounts[o.id] ?? 0,
+    seatsTotal: o.seat_limit ?? 0,
+    created: fmtDate(o.created_at),
+  }))
+
+  return <UsersAndOrgsClient initialUsers={initialUsers} initialOrgs={initialOrgs} />
 }

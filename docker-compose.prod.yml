@@ -129,6 +129,33 @@ services:
   # Whisper transcription worker — pulls audio jobs off the prod redis queue,
   # transcribes on CPU (faster-whisper), writes transcripts to Supabase.
   # Image built+pushed by .github/workflows/build-push-worker.yml.
+  #
+  # ── HA / HORIZONTAL SCALING MODEL ───────────────────────────────────────────
+  # This service is SAFE to run as N replicas. Each replica is an independent
+  # BullMQ consumer (concurrency 1) on the SAME `transcription` queue. BullMQ
+  # uses Redis-side per-job locking, so every replica atomically pulls a DISTINCT
+  # job — no two workers process the same video. Effective throughput therefore
+  # scales linearly: replicas: N  ==  N concurrent transcriptions.
+  #
+  # To scale: bump `deploy.replicas` below (or `docker service scale
+  # <stack>_whisper-worker=N`). Default is 1 (the box is shared with Ollama);
+  # raise once on dedicated capacity. Each +1 replica = +1 concurrent job AND
+  # +1 set of CPU/mem limits consumed (limits are PER-REPLICA, see resources).
+  #
+  # No shared mutable state between replicas:
+  #   • Job distribution: handled by Redis (BullMQ lock) — no coordination needed.
+  #   • Temp/scratch audio: each container writes to its OWN /cache/tmp inside its
+  #     OWN container filesystem / volume — no cross-replica collision.
+  #   • Model weights cache (HF_HOME=/cache/huggingface): the `whisper-cache`
+  #     named volume is PER-NODE on Swarm (a local volume is created on whichever
+  #     node the task lands on). So the FIRST job a node runs downloads the model
+  #     once; subsequent jobs on that node reuse it. Spreading replicas across M
+  #     nodes => the model is pulled once per node, not once per replica.
+  #   • DB writes are idempotent-by-design (status transitions + inserts keyed by
+  #     video_id); a job is only ever held by one worker at a time anyway.
+  # The one honest caveat is Redis Sentinel live failover — see the REDIS_URL
+  # note and restart_policy below (the Python BullMQ client can't follow a master
+  # that moves at runtime; it reconnects on restart).
   whisper-worker:
     image: ghcr.io/lewis159/youtube-transcriber-worker:latest
     environment:
@@ -160,16 +187,36 @@ services:
       # Named volume holds model weights (huggingface cache) + scratch audio.
       - whisper-cache:/cache
     deploy:
+      # Sensible default of 1. SCALE OUT by raising this number (or
+      # `docker service scale <stack>_whisper-worker=N`) — each replica adds one
+      # more concurrent transcription; BullMQ distributes jobs via Redis locking.
+      # See the HA/SCALING MODEL block above the service for the full rationale.
       replicas: 1
       labels:
         - "project=YT_Transcription"
         - "project.component=whisper-worker"
         - "project.env=prod"
+      # Spread replicas across nodes when scaled, so the per-node model cache is
+      # warmed on each node and CPU load isn't piled onto one box. Soft (prefer)
+      # so a single-node cluster still schedules all replicas.
+      placement:
+        preferences:
+          - spread: node.id
+      # on-failure is REQUIRED for HA, not just crash recovery: the Python BullMQ
+      # client is NOT transparently Sentinel-failover-capable. When Sentinel
+      # promotes a new Redis master at runtime the worker's connection breaks and
+      # the process exits; Swarm restarts it and it re-discovers the new master at
+      # boot (worker.py::_redis_connection()). This is the reconnect-on-restart
+      # mitigation — do not change to "none".
       restart_policy:
         condition: on-failure
         delay: 5s
       resources:
         limits:
+          # PER-REPLICA limits (Swarm applies resources to each task). These are
+          # already correctly per-replica: each worker runs concurrency=1, so one
+          # transcription's CPU/RAM fits one replica's budget. When scaling to N
+          # replicas, ensure the cluster has N × these limits of free capacity.
           # Box is shared with Ollama — cap CPU/RAM. Raise on dedicated HW
           # (and bump WHISPER_CPU_THREADS to match the new core count).
           cpus: '${WHISPER_CPU_LIMIT:-2.0}'

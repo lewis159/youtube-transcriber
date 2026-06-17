@@ -13,20 +13,6 @@ const navItems = [
   { href: '/admin', label: 'Admin', icon: '🛡️' },
 ]
 
-const adminItems = [
-  { href: '/admin', label: 'Overview', icon: '🛡️' },
-  { href: '/admin/users', label: 'Users & Orgs', icon: '👥' },
-  { href: '/admin/billing', label: 'Billing', icon: '💳' },
-  { href: '/admin/containers', label: 'Containers', icon: '🐳' },
-  { href: '/admin/security', label: 'Security', icon: '🔒' },
-  { href: '/admin/roadmap', label: 'Roadmap', icon: '🗺️' },
-  { href: '/admin/changelog', label: 'Changelog', icon: '🕐' },
-  { href: '/admin/feature-flags', label: 'Feature Flags', icon: '🏳️' },
-  { href: '/admin/audit-log', label: 'Audit Log', icon: '📋' },
-  { href: '/admin/logs', label: 'Logs', icon: '📜' },
-  { href: '/admin/organisations', label: 'Organisations', icon: '🏢' },
-]
-
 type Role = 'global_admin' | 'support' | 'org_admin' | 'user'
 
 function RoleBadge({ role }: { role: Role }) {
@@ -44,7 +30,7 @@ function RoleBadge({ role }: { role: Role }) {
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const isAdmin = pathname.startsWith('/admin') // on an admin PAGE (layout context)
+  const isAdmin = pathname.startsWith('/admin') // on an admin PAGE — page gets the sidebar (from admin layout), full-width main
 
   // The signed-in user's real role. Defaults to non-admin until confirmed, so
   // the Admin nav item / badge never flash for a normal user.
@@ -88,12 +74,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         gap: '12px',
       }}>
         <div className="mobile-nav-brand-group" style={{ display: 'flex', alignItems: 'center', gap: '40px', flexWrap: 'wrap' }}>
-          <Link href="/" style={{ textDecoration: 'none', fontSize: '18px', fontWeight: 800 }}>
+          <Link href="/dashboard" style={{ textDecoration: 'none', fontSize: '18px', fontWeight: 800 }}>
             <span style={{ color: 'var(--accent)' }}>YT</span>
             <span style={{ color: 'var(--text-primary)' }}> Transcriber</span>
           </Link>
           <nav className="mobile-nav-items" style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-            {(isAdmin ? adminItems : visibleNavItems).map(({ href, label, icon }) => {
+            {visibleNavItems.map(({ href, label, icon }) => {
               // For admin overview: exact match; for sub-pages: prefix match but not just /admin
               const active = href === '/admin'
                 ? pathname === '/admin'
@@ -127,19 +113,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </nav>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {isAdmin && (
-            <Link
-              href="/dashboard"
-              style={{
-                display: 'flex', alignItems: 'center', gap: '6px',
-                padding: '5px 12px', borderRadius: '6px', fontSize: '12px',
-                color: 'var(--text-secondary)', background: 'transparent',
-                border: '0.5px solid #2a2a2a', textDecoration: 'none',
-              }}
-            >
-              ← App
-            </Link>
-          )}
           {role && <RoleBadge role={role} />}
           <UserButton afterSignOutUrl="/" />
         </div>

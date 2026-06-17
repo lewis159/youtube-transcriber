@@ -8,7 +8,8 @@ export const dynamic = 'force-dynamic'
 
 const TIERS = ['Starter', 'Pro', 'Studio', 'Enterprise']
 const ROLES = ['user', 'org_admin', 'support', 'global_admin']
-const STATUSES = ['Active', 'Trial', 'Suspended']
+// Status is derived from the users.is_trial boolean — no Suspended column exists.
+const STATUSES = ['Active', 'Trial']
 
 /**
  * PATCH — update an existing user's tier / role / status.
@@ -32,13 +33,17 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const update: Record<string, string> = {}
+  // NOTE: the `users` table stores tier (lowercase) and role columns, plus an
+  // `is_trial` boolean. There is NO `status` column — status is derived from
+  // is_trial. So a `status` change is translated into an is_trial write here.
+  const update: Record<string, unknown> = {}
 
   if (body.tier !== undefined) {
     if (typeof body.tier !== 'string' || !TIERS.includes(body.tier)) {
       return NextResponse.json({ error: `Invalid tier` }, { status: 400 })
     }
-    update.tier = body.tier
+    // UI sends display labels (Starter/Pro/…); the column is lowercase.
+    update.tier = body.tier.toLowerCase()
   }
   if (body.role !== undefined) {
     if (typeof body.role !== 'string' || !ROLES.includes(body.role)) {
@@ -50,7 +55,8 @@ export async function PATCH(
     if (typeof body.status !== 'string' || !STATUSES.includes(body.status)) {
       return NextResponse.json({ error: `Invalid status` }, { status: 400 })
     }
-    update.status = body.status
+    // Map status → is_trial (no Suspended state exists in the schema).
+    update.is_trial = body.status === 'Trial'
   }
 
   if (Object.keys(update).length === 0) {
@@ -60,7 +66,7 @@ export async function PATCH(
   // Fetch the current row so we can emit before/after audit snapshots.
   const { data: before } = await supabaseAdmin
     .from('users')
-    .select('email, tier, role, status')
+    .select('email, tier, role, is_trial')
     .eq('id', id)
     .single()
 
@@ -68,7 +74,7 @@ export async function PATCH(
     .from('users')
     .update(update)
     .eq('id', id)
-    .select('id, email, tier, role, status')
+    .select('id, email, tier, role, is_trial')
     .single()
 
   if (error) {
@@ -98,15 +104,16 @@ export async function PATCH(
       newValue: update.role,
     })
   }
-  if (update.status !== undefined && before?.status !== update.status) {
-    const suspending = update.status === 'Suspended'
+  if (update.is_trial !== undefined && before?.is_trial !== update.is_trial) {
+    const beforeStatus = before?.is_trial ? 'Trial' : 'Active'
+    const afterStatus = update.is_trial ? 'Trial' : 'Active'
     await logAudit({
-      action: suspending ? 'user_suspended' : 'user_unsuspended',
+      action: 'user_status_change',
       target: 'user',
-      details: `Status ${before?.status ?? '—'} → ${update.status} for ${email}`,
+      details: `Status ${beforeStatus} → ${afterStatus} for ${email}`,
       actorClerkId: userId,
-      oldValue: before?.status,
-      newValue: update.status,
+      oldValue: beforeStatus,
+      newValue: afterStatus,
     })
   }
 

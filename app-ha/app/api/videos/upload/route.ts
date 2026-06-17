@@ -8,6 +8,18 @@ import { checkUserFeature, upgradeRequired } from '@/lib/feature-flags'
 import { enqueueTranscription } from '@/lib/transcription-queue'
 import { logEvent, EVENTS } from '@/lib/event-log'
 
+// ── Cost guardrail: per-tier MONTHLY transcription quota ─────────────────────
+// Tunable. Caps how many videos a user may transcribe per calendar month, by
+// tier. `null` = unlimited (skip the check entirely). Counted against the
+// `videos` table (rows created this calendar month), so it is inherently shared
+// across all app replicas — no extra infra needed.
+const TIER_TRANSCRIPTION_LIMITS: Record<string, number | null> = {
+  starter: 5,
+  pro: 100,
+  studio: 500,
+  enterprise: null, // unlimited
+}
+
 /**
  * Resolve the caller's tier for the Whisper job payload. Best-effort: if the
  * lookup fails for any reason we fall back to 'starter' rather than blocking
@@ -25,6 +37,25 @@ async function getUserTier(clerkUserId: string): Promise<string> {
   } catch {
     return 'starter'
   }
+}
+
+/**
+ * Count how many videos this user has created in the CURRENT calendar month
+ * (UTC). Used to enforce the per-tier monthly transcription quota. Uses a HEAD
+ * count query so we don't pull rows. Counting the shared `videos` table makes
+ * the quota correct across all app replicas.
+ */
+async function countVideosThisMonth(clerkUserId: string): Promise<number> {
+  const supabaseUserId = await getSupabaseUserId(clerkUserId)
+  const now = new Date()
+  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  const { count, error } = await supabaseAdmin
+    .from('videos')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', supabaseUserId)
+    .gte('created_at', startOfMonth.toISOString())
+  if (error) throw error
+  return count ?? 0
 }
 
 /**
@@ -93,6 +124,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(upgradeRequired('transcribe'), { status: 403 })
     }
 
+    // ── Cost guardrail: per-tier MONTHLY transcription quota ────────────────
+    // Runs AFTER the feature gate, BEFORE we create any video row. Unlimited
+    // tiers (limit === null) skip the check. Best-effort count: if the count
+    // query itself fails we fall through and let the upload proceed rather than
+    // hard-blocking a paying user on a transient DB hiccup.
+    const tier = await getUserTier(userId)
+    const limit = TIER_TRANSCRIPTION_LIMITS[tier] ?? TIER_TRANSCRIPTION_LIMITS.starter
+    if (limit != null) {
+      try {
+        const used = await countVideosThisMonth(userId)
+        if (used >= limit) {
+          return NextResponse.json(
+            { error: 'quota_exceeded', feature: 'transcribe', limit, used },
+            { status: 429 }
+          )
+        }
+      } catch (countErr) {
+        console.error('Monthly quota count failed (allowing upload):', countErr)
+      }
+    }
+
     const { youtubeUrl } = await request.json()
 
     if (!youtubeUrl) {
@@ -145,8 +197,8 @@ export async function POST(request: NextRequest) {
       await logEvent({ event: EVENTS.queued, videoId: video.id, userId })
 
       // Enqueue the job for the worker. The worker owns all subsequent status
-      // writes (extracting_audio → transcribing → completed/error).
-      const tier = await getUserTier(userId)
+      // writes (extracting_audio → transcribing → completed/error). Reuses the
+      // `tier` already resolved above for the quota check.
       await enqueueTranscription({
         videoId: video.id,
         youtubeUrl,
@@ -196,6 +248,23 @@ export async function POST(request: NextRequest) {
     }
 
     const message = error instanceof Error ? error.message : 'Failed to process video'
+
+    // Lifecycle log: upload failed. (logEvent never throws — safe in the catch.)
+    // userId may be unavailable if auth() itself threw; resolve it best-effort.
+    let errUserId: string | undefined
+    try {
+      errUserId = (await auth()).userId ?? undefined
+    } catch {
+      errUserId = undefined
+    }
+    await logEvent({
+      level: 'error',
+      event: EVENTS.error,
+      videoId: video?.id,
+      userId: errUserId,
+      message,
+      metadata: { stage: 'upload' },
+    })
 
     return NextResponse.json(
       {
