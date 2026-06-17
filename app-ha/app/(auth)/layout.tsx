@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
@@ -22,6 +23,7 @@ const adminItems = [
   { href: '/admin/changelog', label: 'Changelog', icon: '🕐' },
   { href: '/admin/feature-flags', label: 'Feature Flags', icon: '🏳️' },
   { href: '/admin/audit-log', label: 'Audit Log', icon: '📋' },
+  { href: '/admin/logs', label: 'Logs', icon: '📜' },
   { href: '/admin/organisations', label: 'Organisations', icon: '🏢' },
 ]
 
@@ -42,7 +44,23 @@ function RoleBadge({ role }: { role: Role }) {
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const isAdmin = pathname.startsWith('/admin')
+  const isAdmin = pathname.startsWith('/admin') // on an admin PAGE (layout context)
+
+  // The signed-in user's real role. Defaults to non-admin until confirmed, so
+  // the Admin nav item / badge never flash for a normal user.
+  const [role, setRole] = useState<Role | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/me')
+      .then(r => (r.ok ? r.json() : { role: 'user' }))
+      .then(d => { if (!cancelled) setRole((d?.role ?? 'user') as Role) })
+      .catch(() => { if (!cancelled) setRole('user') })
+    return () => { cancelled = true }
+  }, [])
+
+  const isGlobalAdmin = role === 'global_admin'
+  // Only global admins see the Admin entry in the main nav.
+  const visibleNavItems = navItems.filter(i => i.href !== '/admin' || isGlobalAdmin)
 
   return (
     <div style={{
@@ -75,7 +93,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <span style={{ color: 'var(--text-primary)' }}> Transcriber</span>
           </Link>
           <nav className="mobile-nav-items" style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-            {(isAdmin ? adminItems : navItems).map(({ href, label, icon }) => {
+            {(isAdmin ? adminItems : visibleNavItems).map(({ href, label, icon }) => {
               // For admin overview: exact match; for sub-pages: prefix match but not just /admin
               const active = href === '/admin'
                 ? pathname === '/admin'
@@ -122,7 +140,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               ← App
             </Link>
           )}
-          {isAdmin && <RoleBadge role="global_admin" />}
+          {role && <RoleBadge role={role} />}
           <UserButton afterSignOutUrl="/" />
         </div>
       </header>

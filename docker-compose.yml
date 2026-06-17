@@ -59,6 +59,13 @@ services:
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - REDIS_URL=redis://redis:6379
+      # Admin Containers page talks to Docker via the socket-proxy (never the raw socket).
+      # lib/docker.ts reads DOCKER_HOST; this matches how prod is wired.
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+      # Local Ollama LLM for summaries/chat (OpenAI-compatible endpoint).
+      - LLM_PROVIDER=local
+      - LLM_BASE_URL=http://ollama:11434/v1
+      - LLM_MODEL=qwen2.5:3b
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 10s
@@ -67,6 +74,10 @@ services:
       start_period: 30s
     depends_on:
       redis:
+        condition: service_started
+      docker-socket-proxy:
+        condition: service_started
+      ollama:
         condition: service_started
     restart: unless-stopped
     stop_grace_period: 30s
@@ -103,6 +114,13 @@ services:
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - REDIS_URL=redis://redis:6379
+      # Admin Containers page talks to Docker via the socket-proxy (never the raw socket).
+      # lib/docker.ts reads DOCKER_HOST; this matches how prod is wired.
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+      # Local Ollama LLM for summaries/chat (OpenAI-compatible endpoint).
+      - LLM_PROVIDER=local
+      - LLM_BASE_URL=http://ollama:11434/v1
+      - LLM_MODEL=qwen2.5:3b
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 10s
@@ -112,8 +130,31 @@ services:
     depends_on:
       redis:
         condition: service_started
+      docker-socket-proxy:
+        condition: service_started
+      ollama:
+        condition: service_started
     restart: unless-stopped
     stop_grace_period: 30s
+    networks:
+      - youtube-transcriber-network
+
+  # Least-privilege Docker API gateway for the admin Containers page.
+  # The app never mounts the raw socket; only this proxy does, and it whitelists
+  # just the container list + lifecycle endpoints the page uses.
+  # Prod (yt.bentech.dev on Portainer) must run an equivalent proxy service.
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    environment:
+      # GET /containers/json (list) — required to render the page.
+      - CONTAINERS=1
+      # POST /containers/<id>/{start,stop,pause,unpause,restart,kill} — the page's lifecycle actions.
+      - POST=1
+      # Everything else stays denied (default 0): no images, exec, volumes, networks, etc.
+    volumes:
+      # Read-only mount of the host Docker socket — only the proxy touches it.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
     networks:
       - youtube-transcriber-network
 
@@ -125,9 +166,21 @@ services:
     networks:
       - youtube-transcriber-network
 
+  # Local Ollama LLM server — OpenAI-compatible API at http://ollama:11434/v1.
+  # Internal only (no published ports); the app services reach it over the network.
+  # CPU only. Pulled models persist in the ollama_models volume.
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_models:/root/.ollama
+    restart: unless-stopped
+    networks:
+      - youtube-transcriber-network
+
 volumes:
   redis_data:
   nginx_logs:
+  ollama_models:
 
 networks:
   youtube-transcriber-network:

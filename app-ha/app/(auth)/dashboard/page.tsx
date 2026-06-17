@@ -12,23 +12,137 @@ interface VideoRecord {
   thumbnail?: string
 }
 
+// Terminal statuses: nothing more will happen, so polling can stop. Everything
+// else (legacy pending/processing + Whisper queued/extracting_audio/transcribing)
+// is treated as in-flight.
+const TERMINAL_STATUSES = new Set(['completed', 'error'])
+
+// In-progress states that should show an animated spinner. Includes the legacy
+// 'processing'/'pending' and the new Whisper pipeline states.
+const IN_PROGRESS_STATUSES = new Set([
+  'pending',
+  'processing',
+  'queued',
+  'extracting_audio',
+  'transcribing',
+])
+
+// A user-facing form error: a friendly sentence + an optional call-to-action.
+type FormError = { message: string; action?: { label: string; href: string } }
+
+// AI model preference: which model powers summaries + Q&A chat for this user.
+type AiProvider = 'local' | 'hosted'
+type AiSaveState = 'idle' | 'saving' | 'saved' | 'error'
+
+// Turn an upload API failure into a friendly, actionable message — never surface
+// raw codes like "upgrade_required" to the user.
+function describeUploadError(status: number, body: { error?: string; feature?: string }): FormError {
+  const code = body?.error
+
+  if (status === 403 && code === 'upgrade_required') {
+    const FEATURE_LABELS: Record<string, string> = {
+      transcribe: 'Transcription',
+      export_pdf: 'PDF export',
+      stt_fallback: 'Speech-to-text transcription',
+      ai_summary: 'AI summaries',
+      summary_chat: 'Q&A chat',
+    }
+    const what = FEATURE_LABELS[body?.feature ?? ''] ?? 'This feature'
+    return {
+      message: `${what} isn’t included in your current plan.`,
+      action: { label: 'View plans', href: '/pricing' },
+    }
+  }
+  if (status === 401) {
+    return { message: 'Your session has expired — please refresh and sign in again.' }
+  }
+  if (status === 429) {
+    return {
+      message: 'You’ve reached your transcription limit for now.',
+      action: { label: 'View plans', href: '/pricing' },
+    }
+  }
+  if (status === 400) {
+    // The server sends a human-readable message for bad input; codes have no spaces.
+    const msg = code && /\s/.test(code) ? code : 'That doesn’t look like a valid YouTube URL.'
+    return { message: msg }
+  }
+  if (status >= 500) {
+    return { message: 'Something went wrong on our end. Please try again in a moment.' }
+  }
+  return { message: 'Couldn’t add that video. Please try again.' }
+}
+
 export default function DashboardPage() {
   const [videos, setVideos] = useState<VideoRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [url, setUrl] = useState('')
-  const [urlError, setUrlError] = useState('')
+  const [formError, setFormError] = useState<FormError | null>(null)
   const [exportingId, setExportingId] = useState<string | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+
+  // AI model preference (summaries + Q&A chat). Defaults to 'local'.
+  const [aiProvider, setAiProvider] = useState<AiProvider>('local')
+  const [aiProviderLoaded, setAiProviderLoaded] = useState(false)
+  const [aiSaveState, setAiSaveState] = useState<AiSaveState>('idle')
 
   useEffect(() => {
     loadVideos()
   }, [])
 
+  // Fetch the current AI-model preference once on mount.
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      try {
+        const res = await fetch('/api/settings/ai-provider')
+        if (!res.ok) throw new Error('Failed to load AI model preference')
+        const data = await res.json()
+        if (!active) return
+        setAiProvider(data?.provider === 'hosted' ? 'hosted' : 'local')
+      } catch (e) {
+        console.error(e)
+      } finally {
+        if (active) setAiProviderLoaded(true)
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [])
+
+  async function handleAiProviderChange(next: AiProvider) {
+    if (next === aiProvider || aiSaveState === 'saving') return
+    const prev = aiProvider
+    // Optimistic update.
+    setAiProvider(next)
+    setAiSaveState('saving')
+    try {
+      const res = await fetch('/api/settings/ai-provider', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: next }),
+      })
+      if (!res.ok) throw new Error('Failed to save')
+      const data = await res.json()
+      setAiProvider(data?.provider === 'hosted' ? 'hosted' : 'local')
+      setAiSaveState('saved')
+      setTimeout(() => setAiSaveState((s) => (s === 'saved' ? 'idle' : s)), 1800)
+    } catch (e) {
+      console.error(e)
+      // Roll back the optimistic change.
+      setAiProvider(prev)
+      setAiSaveState('error')
+    }
+  }
+
   // Poll while any video is still being processed, so cards flip
   // Processing → Ready on their own. Stops once nothing is in flight.
+  // Non-terminal states include the legacy ones plus the new Whisper
+  // pipeline states (queued / extracting_audio / transcribing).
   useEffect(() => {
-    const hasPending = videos.some(v => v.status === 'processing' || v.status === 'pending')
+    const hasPending = videos.some(v => !TERMINAL_STATUSES.has(v.status))
     if (!hasPending) return
 
     const interval = setInterval(() => {
@@ -53,11 +167,14 @@ export default function DashboardPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setUrlError('')
-    if (!url.trim()) { setUrlError('Please enter a YouTube URL'); return }
+    setFormError(null)
+    if (!url.trim()) { setFormError({ message: 'Please paste a YouTube URL.' }); return }
 
     const match = url.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/)
-    if (!match) { setUrlError('Could not extract video ID — paste a full YouTube URL'); return }
+    if (!match) {
+      setFormError({ message: 'That doesn’t look like a YouTube link — paste a full URL like https://youtube.com/watch?v=…' })
+      return
+    }
 
     try {
       setUploading(true)
@@ -67,15 +184,15 @@ export default function DashboardPage() {
         body: JSON.stringify({ youtubeUrl: url }),
       })
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        setUrlError(data.error || 'Failed to add video. Please try again.')
+        const body = await res.json().catch(() => ({}))
+        setFormError(describeUploadError(res.status, body))
         return
       }
       setUrl('')
       await loadVideos()
     } catch (e) {
       console.error(e)
-      setUrlError('Failed to add video. Please try again.')
+      setFormError({ message: 'Couldn’t reach the server — check your connection and try again.' })
     } finally {
       setUploading(false)
     }
@@ -118,11 +235,30 @@ export default function DashboardPage() {
     }
   }
 
-  const statusColor = (s: string) => s === 'completed' ? '#4caf50' : s === 'processing' ? 'var(--accent)' : s === 'error' ? '#f44336' : '#666'
-  const statusLabel = (s: string) => s === 'completed' ? 'Ready' : s === 'processing' ? 'Processing…' : s === 'pending' ? 'Queued' : 'Error'
+  const statusColor = (s: string) =>
+    s === 'completed' ? '#4caf50'
+    : s === 'error' ? '#f44336'
+    : IN_PROGRESS_STATUSES.has(s) ? 'var(--accent)'
+    : '#666'
+  const statusLabel = (s: string) => {
+    switch (s) {
+      case 'completed': return 'Ready'
+      case 'error': return 'Error'
+      case 'pending': return 'Queued'
+      case 'queued': return 'Queued'
+      case 'extracting_audio': return 'Extracting audio…'
+      case 'transcribing': return 'Transcribing…'
+      case 'processing': return 'Processing…'
+      default: return s
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
+
+      {/* Spinner keyframe for in-progress status indicators (scoped here so it
+          deletes cleanly with this feature). */}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {/* Page header */}
       <div>
@@ -148,13 +284,14 @@ export default function DashboardPage() {
             type="text"
             placeholder="https://youtube.com/watch?v=..."
             value={url}
-            onChange={e => setUrl(e.target.value)}
+            onChange={e => { setUrl(e.target.value); if (formError) setFormError(null) }}
             disabled={uploading}
+            aria-invalid={!!formError}
             style={{
               flex: 1,
               minWidth: '260px',
               background: 'var(--bg-elevated)',
-              border: `1px solid ${urlError ? 'var(--accent)' : 'var(--border-subtle)'}`,
+              border: `1px solid ${formError ? 'var(--accent)' : 'var(--border-subtle)'}`,
               borderRadius: '6px',
               padding: '12px 16px',
               color: 'var(--text-primary)',
@@ -171,9 +308,116 @@ export default function DashboardPage() {
             {uploading ? 'Adding…' : 'Transcribe'}
           </button>
         </form>
-        {urlError && (
-          <p style={{ color: 'var(--accent)', fontSize: '13px', marginTop: '8px' }}>{urlError}</p>
+        {formError && (
+          <div
+            role="alert"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              flexWrap: 'wrap',
+              marginTop: '12px',
+              padding: '12px 14px',
+              background: 'var(--accent-subtle, rgba(229,57,53,0.08))',
+              border: '1px solid var(--accent-border, rgba(229,57,53,0.3))',
+              borderRadius: '8px',
+            }}
+          >
+            <span aria-hidden style={{ fontSize: '15px', lineHeight: 1 }}>⚠️</span>
+            <span style={{ color: 'var(--text-primary)', fontSize: '13px', flex: 1, minWidth: '180px' }}>
+              {formError.message}
+            </span>
+            {formError.action && (
+              <Link
+                href={formError.action.href}
+                className="btn-primary"
+                style={{ fontSize: '12px', padding: '6px 14px', whiteSpace: 'nowrap', textDecoration: 'none' }}
+              >
+                {formError.action.label}
+              </Link>
+            )}
+          </div>
         )}
+
+        {/* AI model preference — controls which model powers summaries + Q&A chat.
+            Segmented control: Local (in-house) vs Hosted (Claude). */}
+        <div
+          style={{
+            marginTop: '20px',
+            paddingTop: '20px',
+            borderTop: '1px solid var(--border-subtle)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            flexWrap: 'wrap',
+            gap: '12px',
+          }}
+        >
+          <div style={{ maxWidth: '420px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>AI model</span>
+              {aiSaveState === 'saving' && (
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Saving…</span>
+              )}
+              {aiSaveState === 'saved' && (
+                <span style={{ fontSize: '12px', color: 'var(--accent)' }}>Saved</span>
+              )}
+              {aiSaveState === 'error' && (
+                <span style={{ fontSize: '12px', color: 'var(--accent)' }}>Couldn’t save — try again</span>
+              )}
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Local runs on our own engine (private, free). Hosted uses Claude (higher quality, paid).
+            </div>
+          </div>
+
+          {/* Segmented control */}
+          <div
+            role="radiogroup"
+            aria-label="AI model"
+            style={{
+              display: 'inline-flex',
+              flexShrink: 0,
+              background: 'var(--bg-elevated)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '8px',
+              padding: '3px',
+              gap: '3px',
+              opacity: aiProviderLoaded ? 1 : 0.6,
+            }}
+          >
+            {([
+              { value: 'local' as const, label: 'Local' },
+              { value: 'hosted' as const, label: 'Hosted (Claude)' },
+            ]).map(({ value, label }) => {
+              const active = aiProvider === value
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  disabled={!aiProviderLoaded || aiSaveState === 'saving'}
+                  onClick={() => handleAiProviderChange(value)}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    cursor: !aiProviderLoaded || aiSaveState === 'saving' ? 'not-allowed' : 'pointer',
+                    background: active ? 'var(--accent)' : 'transparent',
+                    color: active ? '#fff' : 'var(--text-secondary)',
+                    transition: 'background 0.15s ease, color 0.15s ease',
+                  }}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Stats row */}
@@ -181,7 +425,7 @@ export default function DashboardPage() {
         {[
           { label: 'Total videos', value: videos.length },
           { label: 'Ready', value: videos.filter(v => v.status === 'completed').length },
-          { label: 'Processing', value: videos.filter(v => v.status === 'processing' || v.status === 'pending').length },
+          { label: 'Processing', value: videos.filter(v => IN_PROGRESS_STATUSES.has(v.status)).length },
         ].map(({ label, value }) => (
           <div key={label} style={{
             background: 'var(--bg-card)',
@@ -258,11 +502,24 @@ export default function DashboardPage() {
                       color: statusColor(video.status),
                       fontWeight: 600,
                     }}>
-                      <span style={{
-                        width: '6px', height: '6px', borderRadius: '50%',
-                        background: statusColor(video.status),
-                        display: 'inline-block',
-                      }} />
+                      {IN_PROGRESS_STATUSES.has(video.status) ? (
+                        <span
+                          aria-hidden
+                          style={{
+                            width: '10px', height: '10px', borderRadius: '50%',
+                            border: '2px solid var(--accent-border, rgba(229,57,53,0.3))',
+                            borderTopColor: statusColor(video.status),
+                            display: 'inline-block',
+                            animation: 'spin 0.8s linear infinite',
+                          }}
+                        />
+                      ) : (
+                        <span style={{
+                          width: '6px', height: '6px', borderRadius: '50%',
+                          background: statusColor(video.status),
+                          display: 'inline-block',
+                        }} />
+                      )}
                       {statusLabel(video.status)}
                     </span>
                     <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>

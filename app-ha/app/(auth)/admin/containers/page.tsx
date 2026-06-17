@@ -376,7 +376,9 @@ export default function ContainersPage() {
             <div style={{ fontSize: '14px', fontWeight: 600, color: '#E53935', marginBottom: '8px' }}>Docker socket unavailable</div>
             <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{error}</div>
             <div style={{ fontSize: '12px', color: '#555', marginTop: '8px' }}>
-              Ensure the container has <code style={{ fontFamily: 'monospace', color: '#888' }}>/var/run/docker.sock</code> mounted.
+              The app reaches Docker through the <code style={{ fontFamily: 'monospace', color: '#888' }}>docker-socket-proxy</code> service
+              (<code style={{ fontFamily: 'monospace', color: '#888' }}>DOCKER_HOST=tcp://docker-socket-proxy:2375</code>).
+              Ensure that proxy is running on the same network — or, for local dev only, mount <code style={{ fontFamily: 'monospace', color: '#888' }}>/var/run/docker.sock</code> into the app.
             </div>
           </div>
         )}

@@ -25,6 +25,12 @@ services:
       # Admin container monitor talks to Docker via the read-only socket proxy,
       # never the raw socket (security finding #9).
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
+      # ── Pluggable LLM provider (summaries + Q&A chat) ──
+      # Local Hermes Ollama reached over the external Hermes Swarm network.
+      # See app-ha/lib/llm.ts: LLM_PROVIDER / LLM_BASE_URL / LLM_MODEL.
+      - LLM_PROVIDER=local
+      - LLM_BASE_URL=http://hermes-agent_ollama:11434/v1
+      - LLM_MODEL=qwen2.5
     deploy:
       replicas: 2
       labels:
@@ -51,6 +57,8 @@ services:
     networks:
       - yt-prod
       - proxy
+      # Reach the local Hermes Ollama for summaries/chat.
+      - hermes-net
 
   # Tecnativa docker-socket-proxy: the ONLY service that touches the real
   # Docker socket. It exposes a locked-down HTTP API on :2375 to the app on the
@@ -118,8 +126,63 @@ services:
     networks:
       - yt-prod
 
+  # Whisper transcription worker — pulls audio jobs off the prod redis queue,
+  # transcribes on CPU (faster-whisper), writes transcripts to Supabase.
+  # Image built+pushed by .github/workflows/build-push-worker.yml.
+  whisper-worker:
+    image: ghcr.io/lewis159/youtube-transcriber-worker:latest
+    environment:
+      # ── Redis: topology-flexible, survives failover in the HA stack ──
+      # HA prod runs Redis Sentinel; the worker discovers the current master
+      # via Sentinel at connect time. This matches the URL the app already sets
+      # in docker-compose.app.yml. On a Sentinel failover the worker reconnects
+      # /restarts to pick up the new master (restart_policy: on-failure below);
+      # see whisper-worker/worker.py::_redis_connection() for the limitation.
+      - REDIS_URL=sentinel://sentinel-1:26379,sentinel-2:26380,sentinel-3:26381/0?sentinelName=mymaster
+      # Single-redis alternative (local/dev or the simple prod `redis` service):
+      #   - REDIS_URL=redis://redis:6379
+      # …or the discrete-host form (used when REDIS_URL is unset):
+      #   - REDIS_HOST=redis
+      #   - REDIS_PORT=6379
+      # ── Supabase (service-role key bypasses RLS) ──
+      # SUPABASE_URL reuses the same project URL the app gets via
+      # NEXT_PUBLIC_SUPABASE_URL; the worker also accepts SUPABASE_SERVICE_ROLE_KEY.
+      - SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      # ── Whisper / transcription tuning ──
+      - WHISPER_MODEL=${WHISPER_MODEL:-base}
+      - WHISPER_CPU_THREADS=${WHISPER_CPU_THREADS:-2}
+      - MAX_AUDIO_SECONDS=${MAX_AUDIO_SECONDS:-7200}
+      # ── Cache dirs (point at the mounted volume) ──
+      - HF_HOME=/cache/huggingface
+      - WHISPER_TEMP_DIR=/cache/tmp
+    volumes:
+      # Named volume holds model weights (huggingface cache) + scratch audio.
+      - whisper-cache:/cache
+    deploy:
+      replicas: 1
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=whisper-worker"
+        - "project.env=prod"
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          # Box is shared with Ollama — cap CPU/RAM. Raise on dedicated HW
+          # (and bump WHISPER_CPU_THREADS to match the new core count).
+          cpus: '${WHISPER_CPU_LIMIT:-2.0}'
+          memory: ${WHISPER_MEM_LIMIT:-4G}
+    networks:
+      # yt-prod to reach redis; hermes-net is harmless here (kept for parity /
+      # future use), the worker itself does not call Ollama.
+      - yt-prod
+      - hermes-net
+
 volumes:
   redis-data:
+  whisper-cache:
 
 networks:
   yt-prod:
@@ -127,3 +190,11 @@ networks:
 
   proxy:
     external: true
+
+  # The local Hermes Ollama lives in a SEPARATE Swarm stack. We join its
+  # overlay network as external. The real Docker network name is the Hermes
+  # stack name + network name: `hermes-agent_hermes-net`.
+  # NB: that network must be attachable/overlay for this stack to join it.
+  hermes-net:
+    external: true
+    name: hermes-agent_hermes-net

@@ -77,6 +77,23 @@ export default async function VideoDetailPage({ params }: { params: Promise<{ id
             >
               ▶ Watch on YouTube
             </a>
+            {video.status === 'completed' && (
+              <Link
+                href={`/video/${id}/summary`}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  background: '#E53935',
+                  border: '1px solid #E53935',
+                  color: 'white',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                }}
+              >
+                ✨ AI Summary
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -90,12 +107,20 @@ export default async function VideoDetailPage({ params }: { params: Promise<{ id
           textAlign: 'center',
           color: 'var(--text-muted)',
         }}>
-          <div style={{ fontSize: '32px', marginBottom: '16px' }}>⏳</div>
+          <div style={{ fontSize: '32px', marginBottom: '16px' }}>
+            {video.status === 'error' ? '⚠️' : '⏳'}
+          </div>
           <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)' }}>
-            Processing…
+            {video.status === 'error' ? 'Something went wrong'
+              : video.status === 'queued' || video.status === 'pending' ? 'Queued…'
+              : video.status === 'extracting_audio' ? 'Extracting audio…'
+              : video.status === 'transcribing' ? 'Transcribing…'
+              : 'Processing…'}
           </div>
           <div style={{ fontSize: '13px' }}>
-            Your transcript is being generated. Check back in a moment.
+            {video.status === 'error'
+              ? 'We could not generate a transcript for this video. Please try again.'
+              : 'Your transcript is being generated. Check back in a moment.'}
           </div>
         </div>
       ) : (

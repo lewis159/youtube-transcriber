@@ -1,0 +1,13 @@
+# Whisper transcription worker — pinned runtime dependencies.
+# Keep in sync with what worker.py actually imports.
+
+faster-whisper==1.1.1   # local STT (CTranslate2 / int8 on CPU)
+requests==2.32.3         # required by faster-whisper.utils (model download); not auto-installed
+# audio download + caption (json3) fast path.
+# ⚠️ KEEP CURRENT: YouTube changes its player frequently and breaks older yt-dlp
+# (SABR / nsig extraction → "No video formats found"). Bump this regularly and
+# rebuild the image (or `pip install -U yt-dlp`). Verified working: 2026.6.9.
+yt-dlp==2026.6.9
+bullmq==2.14.0           # official Python BullMQ client — same queue protocol as the JS app
+supabase==2.15.1         # service-role writes (bypasses RLS)
+redis==5.2.1             # BullMQ's underlying Redis driver (transitive but pinned explicitly)

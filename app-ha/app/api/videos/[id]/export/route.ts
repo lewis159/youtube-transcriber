@@ -2,8 +2,8 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { getVideoByIdAndUser, getVideoTranscript } from '@/lib/supabase'
-import { generateTXT, generateSRT, generateZIP } from '@/lib/export'
+import { getVideoByIdAndUser, getVideoTranscript, supabaseAdmin } from '@/lib/supabase'
+import { generateTXT, generateSRT, generateZIP, generateSummaryPDF } from '@/lib/export'
 import { checkUserFeature, upgradeRequired } from '@/lib/feature-flags'
 
 export async function GET(
@@ -27,6 +27,11 @@ export async function GET(
       if (!(await checkUserFeature(userId, 'export_pdf'))) {
         return NextResponse.json(upgradeRequired('export_pdf'), { status: 403 })
       }
+    } else if (format === 'summary-pdf') {
+      // Summary PDF rides the AI summary feature gate (it exports the summary).
+      if (!(await checkUserFeature(userId, 'ai_summary'))) {
+        return NextResponse.json(upgradeRequired('ai_summary'), { status: 403 })
+      }
     } else {
       if (!(await checkUserFeature(userId, 'export_txt'))) {
         return NextResponse.json(upgradeRequired('export_txt'), { status: 403 })
@@ -48,6 +53,32 @@ export async function GET(
     // PDF is not yet implemented server-side
     if (format === 'pdf') {
       return NextResponse.json({ error: 'pdf_not_implemented' }, { status: 501 })
+    }
+
+    // Branded summary PDF — exports the cached AI summary (no transcript needed).
+    if (format === 'summary-pdf') {
+      const { data: summaryRow } = await supabaseAdmin
+        .from('video_summaries')
+        .select('summary, key_points, chapters')
+        .eq('video_id', id)
+        .single()
+
+      if (!summaryRow) {
+        return NextResponse.json({ error: 'Summary not found' }, { status: 404 })
+      }
+
+      const pdf = generateSummaryPDF(video.title || video.youtube_id, {
+        summary: summaryRow.summary ?? '',
+        keyPoints: Array.isArray(summaryRow.key_points) ? summaryRow.key_points : [],
+        chapters: Array.isArray(summaryRow.chapters) ? summaryRow.chapters : [],
+      })
+
+      return new NextResponse(Buffer.from(pdf), {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="summary-${video.youtube_id}.pdf"`,
+        },
+      })
     }
 
     const transcript = await getVideoTranscript(id)

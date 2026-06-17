@@ -1,0 +1,64 @@
+# ============================================================================
+# Whisper transcription worker — SEPARATE, ADDITIVE compose file.
+#
+# Defines ONLY the whisper-worker service. It does NOT define or modify Redis,
+# the app, or any other service. It joins the EXISTING external network
+# `youtube-transcriber-network` (created by docker-compose.redis.yml) and reaches
+# Redis at the existing master service `redis-master:6379`.
+#
+# Bring up Redis first (docker-compose.redis.yml), then this:
+#     docker compose -f docker-compose.redis.yml up -d
+#     docker compose -f docker-compose.whisper.yml up -d --build
+#
+# Clean removal: see whisper-worker/README.md.
+# ============================================================================
+version: '3.9'
+
+services:
+  whisper-worker:
+    build:
+      context: ./whisper-worker
+      dockerfile: Dockerfile
+    image: yt-whisper-worker:latest
+    restart: unless-stopped
+    networks:
+      - youtube-transcriber-network
+    environment:
+      # ── Redis (matches docker-compose.redis.yml master service) ──
+      # REDIS_URL takes precedence if set; otherwise REDIS_HOST/REDIS_PORT.
+      REDIS_HOST: ${REDIS_HOST:-redis-master}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      # REDIS_URL: ${REDIS_URL:-}
+
+      # ── Supabase (service-role key bypasses RLS) ──
+      SUPABASE_URL: ${SUPABASE_URL:?set SUPABASE_URL}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:?set SUPABASE_SERVICE_KEY or SUPABASE_SERVICE_ROLE_KEY}}
+
+      # ── Whisper / transcription tuning ──
+      # Default 2 threads: box is SHARED with Ollama. Raise on dedicated HW.
+      WHISPER_MODEL: ${WHISPER_MODEL:-base}
+      WHISPER_CPU_THREADS: ${WHISPER_CPU_THREADS:-2}
+      MAX_AUDIO_SECONDS: ${MAX_AUDIO_SECONDS:-7200}
+
+      # ── Cache dirs (point at the mounted volume) ──
+      HF_HOME: /cache/huggingface
+      WHISPER_TEMP_DIR: /cache/tmp
+    volumes:
+      # Named volume holds model weights (huggingface cache) + scratch audio.
+      - whisper-cache:/cache
+    deploy:
+      resources:
+        limits:
+          # Capped to ~2 cores / 4G because the box is shared with Ollama.
+          # Raise these at go-live on dedicated hardware (and bump
+          # WHISPER_CPU_THREADS to match the new core count).
+          cpus: '${WHISPER_CPU_LIMIT:-2.0}'
+          memory: ${WHISPER_MEM_LIMIT:-4G}
+
+volumes:
+  whisper-cache:
+
+networks:
+  # Reuse the network created by docker-compose.redis.yml — do NOT recreate it.
+  youtube-transcriber-network:
+    external: true

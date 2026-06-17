@@ -2,9 +2,50 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { createVideo, updateVideoStatus, saveTranscript } from '@/lib/supabase'
+import { createVideo, updateVideoStatus, saveTranscript, supabaseAdmin, getSupabaseUserId } from '@/lib/supabase'
 import { fetchTranscript, extractYouTubeId, getYouTubeThumbnail, getYouTubeTitle } from '@/lib/transcript'
 import { checkUserFeature, upgradeRequired } from '@/lib/feature-flags'
+import { enqueueTranscription } from '@/lib/transcription-queue'
+import { logEvent, EVENTS } from '@/lib/event-log'
+
+/**
+ * Resolve the caller's tier for the Whisper job payload. Best-effort: if the
+ * lookup fails for any reason we fall back to 'starter' rather than blocking
+ * the upload. Only used on the async (flag-ON) path.
+ */
+async function getUserTier(clerkUserId: string): Promise<string> {
+  try {
+    const supabaseUserId = await getSupabaseUserId(clerkUserId)
+    const { data } = await supabaseAdmin
+      .from('users')
+      .select('tier')
+      .eq('id', supabaseUserId)
+      .single()
+    return data?.tier ?? 'starter'
+  } catch {
+    return 'starter'
+  }
+}
+
+/**
+ * Read the caller's per-user local-transcription opt-in
+ * (users.local_transcription_enabled, migration 011). Best-effort: any failure
+ * resolves to `false` so we fall back to the safe synchronous caption path
+ * rather than enqueueing against the user's wishes / a missing pref.
+ */
+async function getLocalTranscriptionEnabled(clerkUserId: string): Promise<boolean> {
+  try {
+    const supabaseUserId = await getSupabaseUserId(clerkUserId)
+    const { data } = await supabaseAdmin
+      .from('users')
+      .select('local_transcription_enabled')
+      .eq('id', supabaseUserId)
+      .single()
+    return data?.local_transcription_enabled === true
+  } catch {
+    return false
+  }
+}
 
 /**
  * Background processing for a freshly-created video.
@@ -52,7 +93,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(upgradeRequired('transcribe'), { status: 403 })
     }
 
-    const { youtubeUrl, title } = await request.json()
+    const { youtubeUrl } = await request.json()
 
     if (!youtubeUrl) {
       return NextResponse.json({ error: 'YouTube URL is required' }, { status: 400 })
@@ -74,6 +115,59 @@ export async function POST(request: NextRequest) {
       videoTitle,
       getYouTubeThumbnail(youtubeId)
     )
+
+    // Lifecycle log: video row created. (logEvent never throws.)
+    await logEvent({
+      event: EVENTS.video_added,
+      videoId: video.id,
+      userId,
+      metadata: { youtubeUrl },
+    })
+
+    // ── Async (Whisper) path — flag-gated, default OFF ──────────────────────
+    // The async Whisper pipeline now requires BOTH:
+    //   (1) the `stt_fallback` feature being enabled for the user's tier, AND
+    //   (2) the user's own opt-in (users.local_transcription_enabled === true).
+    // Only when BOTH are true do we hand the video off to the in-house Whisper
+    // worker via the `transcription` queue. Otherwise we fall through to the
+    // EXISTING synchronous caption scrape below — unchanged.
+    const [hasFallbackFeature, localEnabled] = await Promise.all([
+      checkUserFeature(userId, 'stt_fallback'),
+      getLocalTranscriptionEnabled(userId),
+    ])
+    const useWhisper = hasFallbackFeature && localEnabled
+
+    if (useWhisper) {
+      // Mark queued up front so the dashboard reflects the new pipeline state.
+      await updateVideoStatus(video.id, 'queued')
+
+      // Lifecycle log: handed off to the async Whisper queue.
+      await logEvent({ event: EVENTS.queued, videoId: video.id, userId })
+
+      // Enqueue the job for the worker. The worker owns all subsequent status
+      // writes (extracting_audio → transcribing → completed/error).
+      const tier = await getUserTier(userId)
+      await enqueueTranscription({
+        videoId: video.id,
+        youtubeUrl,
+        userId,
+        tier,
+      })
+
+      // Respond right away — the dashboard polls for the status to flip.
+      return NextResponse.json(
+        {
+          success: true,
+          videoId: video.id,
+          youtubeId,
+          status: 'queued',
+        },
+        { status: 201 }
+      )
+    }
+
+    // Lifecycle log: synchronous caption path taken.
+    await logEvent({ event: EVENTS.sync_started, videoId: video.id, userId })
 
     // Mark as processing up front so the dashboard shows the right state.
     await updateVideoStatus(video.id, 'processing')

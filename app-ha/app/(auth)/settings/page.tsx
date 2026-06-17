@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import Link from 'next/link'
 import { getSupabaseUserId, supabaseAdmin } from '@/lib/supabase'
 import DeleteAccountButton from './DeleteAccountButton'
+import LocalTranscriptionToggle from './LocalTranscriptionToggle'
 
 const TIER_INFO = {
   starter: {
@@ -182,6 +183,19 @@ export default async function SettingsPage() {
             <div style={{ width: '0%', height: '100%', background: 'var(--accent)', borderRadius: '3px' }} />
           </div>
         </div>
+      </section>
+
+      {/* Transcription */}
+      <section style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-default)',
+        borderRadius: '12px',
+        padding: '28px',
+      }}>
+        <h2 style={{ fontSize: '12px', fontWeight: 700, marginBottom: '20px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          Transcription
+        </h2>
+        <LocalTranscriptionToggle />
       </section>
 
       {/* Billing placeholder */}
