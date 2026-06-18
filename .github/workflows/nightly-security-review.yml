@@ -1,0 +1,98 @@
+name: Nightly Security Review
+
+# Automated, unattended security review of the canonical app (app-ha/).
+# Runs in GitHub's cloud on a schedule, so it works with your machine offline.
+# Findings are filed as GitHub Issues labelled "security". It NEVER changes code
+# or opens PRs.
+
+on:
+  schedule:
+    # 02:00 UTC daily. GitHub cron has no timezone support; this is ~02:00–03:00
+    # London depending on BST. Adjust the hour if you want strict local time.
+    - cron: '0 2 * * *'
+  workflow_dispatch: {} # allow manual runs from the Actions tab for testing
+
+concurrency:
+  group: nightly-security-review
+  cancel-in-progress: false
+
+jobs:
+  security-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write # needed to create issues + ensure the "security" label exists
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run nightly security review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cat > "$RUNNER_TEMP/security-prompt.md" <<'PROMPT'
+          You are an automated security reviewer running in CI for the GitHub
+          repository identified by the GH_REPO environment variable. The `gh` CLI
+          is pre-authenticated (GH_TOKEN). Follow these steps exactly.
+
+          1. SCOPE: Review ONLY the code under the `app-ha/` directory — it is the
+             canonical application. Ignore the stale root `app/` tree and all other
+             directories.
+
+          2. WHAT TO LOOK FOR: Genuine, exploitable security issues only —
+             hardcoded secrets / API keys / credentials, SQL or command injection,
+             missing or broken authentication/authorization, insecure direct object
+             references, XSS, SSRF, path traversal, unsafe deserialization, exposed
+             sensitive endpoints, insecure cookie/session/CORS handling, and
+             dangerous dependency or configuration mistakes. Be conservative: report
+             only findings you are confident are real and exploitable. No style nits,
+             no speculative "could be hardened" items.
+
+          3. DEDUPLICATE: Before filing anything, run
+             `gh issue list --label security --state open --limit 200 --json number,title,body`
+             and read it. Do NOT create an issue that duplicates an already-open
+             security issue. If a finding already has an open issue, skip it.
+
+          4. ENSURE LABEL EXISTS:
+             `gh label create security --color B60205 --description "Automated security finding" 2>/dev/null || true`
+
+          5. FILE NEW FINDINGS: For each NEW confirmed finding, create exactly one
+             issue with:
+               - Title: `[Security][<SEVERITY>] <short description>`
+                 where SEVERITY is one of CRITICAL, HIGH, MEDIUM, LOW.
+               - Body containing, as markdown:
+                   **Severity:** ...
+                   **Affected file(s):** path:line (relative to repo root)
+                   **Description:** what the vulnerability is and its impact
+                   **Suggested fix:** concrete remediation
+                   _Filed automatically by the Nightly Security Review workflow._
+               - Label: `security`
+             Use: `gh issue create --title "..." --body "..." --label security`
+
+          6. CONSTRAINTS: Do NOT modify any files. Do NOT commit. Do NOT push. Do
+             NOT open pull requests. Issues are the ONLY output. If you find no new
+             issues, file nothing (do not create a "no issues found" issue).
+
+          7. Finish by printing a short plain-text summary: how many files/areas you
+             reviewed, how many findings were new vs. skipped-as-duplicate, and the
+             issue numbers you created.
+          PROMPT
+          # Scoped permissions: the agent can ONLY read code (Read/Grep/Glob) and
+          # run the gh CLI. It cannot write files, run arbitrary shell commands,
+          # commit, or push. Anything outside this allowlist is denied (and in
+          # headless mode there is no prompt, so it simply cannot act on it).
+          claude -p "$(cat "$RUNNER_TEMP/security-prompt.md")" \
+            --allowedTools "Read,Grep,Glob,Bash(gh:*)" \
+            --max-turns 60
