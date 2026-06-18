@@ -1,0 +1,164 @@
+version: '3.9'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OBJECT STORAGE STACK — MinIO (S3-compatible) for YT Transcriber  (Docker Swarm)
+#
+#   Standalone Swarm stack. Stands up MinIO on host #1 so transcripts / exports /
+#   large artifacts CAN later be moved out of Postgres. The app does NOT use this
+#   yet — see STORAGE_NOTES.md ("Integration path") for the (future) wiring plan.
+#
+#   Deploy (Swarm):
+#     MINIO_ROOT_USER=... MINIO_ROOT_PASSWORD=... \
+#       docker stack deploy -c docker-compose.storage.yml yt-storage
+#
+#   Required env (export in the deploying shell or set in Portainer stack env):
+#     MINIO_ROOT_USER       — MinIO root access key   (treat as a credential)
+#     MINIO_ROOT_PASSWORD   — MinIO root secret key    (≥ 8 chars; use a strong one)
+#
+#   Conventions match docker-compose.prod.yml:
+#     labels  project=YT_Transcription / project.component=... / project.env=prod
+#     soft `spread: node.id` placement (schedules on 1 node now, spreads later)
+#
+#   ── NETWORKING ──────────────────────────────────────────────────────────────
+#   MinIO sits on its OWN `storage` overlay AND joins the existing prod overlay
+#   `yt-prod` (declared external here) so the app/worker on yt-prod can reach the
+#   S3 endpoint at  http://minio:9000  by service name WITHOUT publishing it to
+#   the host. If `yt-prod` does not exist yet on the target Swarm (e.g. deploying
+#   this stack in isolation), either deploy docker-compose.prod.yml first, or
+#   comment out the `yt-prod` network block below + its references on `minio`.
+#
+#   ── CONSOLE EXPOSURE (NPM) ──────────────────────────────────────────────────
+#   Ports 9000 (S3 API) and 9001 (console) are NOT published to the host here.
+#   To reach the web console, add an Nginx Proxy Manager Proxy Host pointing at
+#   the `minio` service on port 9001 (e.g. forward host=minio, port=9001), gated
+#   behind NPM Access Lists / auth, on an internal-only or admin hostname. Do NOT
+#   expose 9001 broadly, and never expose the 9000 S3 API publicly unless you
+#   intend MinIO to serve presigned URLs to the internet (separate decision). For
+#   NPM to route to `minio`, NPM must share a network with it — attach NPM to the
+#   `storage` (or yt-prod) overlay, or add an `npm`/`proxy` external network.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── MinIO S3-compatible object store (single-node / standalone) ─────────────
+  # NOT HA on one node/one drive — see STORAGE_NOTES.md ("HA / multi-host"). The
+  # path to distributed MinIO (erasure coding, ≥4 drives across nodes) is designed
+  # at the 3-node stage; this matches the rest of the estate being single-node now.
+  minio:
+    # Pinned to a recent stable release. MinIO tags are date-stamped; bump
+    # deliberately (read release notes — they ship breaking changes occasionally).
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      # Pretty console URL hint (optional); harmless if NPM host differs.
+      - MINIO_BROWSER_REDIRECT_URL=https://minio.bentech.dev
+    volumes:
+      - minio-data:/data
+    # NOTE: no `ports:` — 9000 (S3) + 9001 (console) stay internal to the
+    # overlays. Reach S3 from the app at http://minio:9000; reach the console via
+    # NPM (see header). Add a published port ONLY if you deliberately need host
+    # access, and prefer NPM in front of it.
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || curl -fsS http://127.0.0.1:9000/minio/health/live || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      replicas: 1
+      placement:
+        # Soft preference: schedules on a single node today, naturally spreads
+        # when host #2/#3 join. A standalone MinIO's data volume is node-local,
+        # so for a true multi-node distributed setup this becomes hard placement
+        # per drive — see STORAGE_NOTES.md.
+        preferences:
+          - spread: node.id
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=minio"
+        - "project.env=prod"
+      update_config:
+        parallelism: 1
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          # Modest cap — MinIO is light at rest; raise when it serves real
+          # transcript/export traffic or when moving to distributed mode.
+          memory: 512M
+    networks:
+      - storage
+      - yt-prod
+
+  # ── One-shot bucket bootstrap (minio/mc) ────────────────────────────────────
+  # Waits for MinIO to be ready, sets an alias, then idempotently creates the
+  # buckets and locks them private. Re-running the stack re-runs this harmlessly
+  # (`mc mb --ignore-existing`, `mc anonymous set none`). It exits 0 when done;
+  # restart_policy: none so Swarm doesn't loop it.
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        echo "Waiting for MinIO to become ready..."
+        until mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" >/dev/null 2>&1; do
+          echo "  minio not ready yet, retrying in 3s..."
+          sleep 3
+        done
+        echo "MinIO reachable. Ensuring buckets exist (idempotent)..."
+        mc mb --ignore-existing local/yt-transcripts
+        mc mb --ignore-existing local/yt-exports
+        # yt-backups: OPTIONAL local (non-offsite) target that COULD host pgBackRest
+        # repo data. This is NOT a substitute for offsite backups — see
+        # STORAGE_NOTES.md. Created here so the bucket exists if you opt in later.
+        mc mb --ignore-existing local/yt-backups
+        echo "Setting all buckets to PRIVATE (no anonymous access)..."
+        mc anonymous set none local/yt-transcripts
+        mc anonymous set none local/yt-exports
+        mc anonymous set none local/yt-backups
+        echo "Bucket bootstrap complete:"
+        mc ls local
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    depends_on:
+      - minio
+    deploy:
+      # Run once to completion; do not restart on success.
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=minio-init"
+        - "project.env=prod"
+      resources:
+        limits:
+          memory: 64M
+    networks:
+      - storage
+
+volumes:
+  # Node-local named volume holding all object data. On a single-node standalone
+  # MinIO this is your durability boundary — back it up (or replicate) until the
+  # distributed/erasure-coded multi-node layout lands. See STORAGE_NOTES.md.
+  minio-data:
+
+networks:
+  # Dedicated overlay for the storage tier. Attachable so a throwaway `mc`
+  # container can be exec'd onto the net for admin/debug.
+  storage:
+    driver: overlay
+    attachable: true
+
+  # The existing prod overlay (app + worker live here). Declared external so the
+  # app/worker can reach MinIO at http://minio:9000 by service name. Comment out
+  # this block + its `minio` reference to deploy storage fully standalone.
+  yt-prod:
+    external: true
