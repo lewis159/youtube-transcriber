@@ -1,0 +1,76 @@
+# ── LiteLLM proxy config — LLM HA gateway for YT Transcriber ──────────────────
+# Topology:  app → LiteLLM (this proxy, :4000) → Ollama (local)
+#            fallback on local failure/timeout → hosted Claude (Anthropic)
+#
+# Served model name the app calls:  yt-llm
+#   yt-llm  → ollama/qwen2.5  (primary, local)
+#           → claude-fallback (Anthropic) when the local model fails/times out
+#
+# Env consumed (set on the litellm service in docker-compose.prod.yml):
+#   OLLAMA_BASE_URL   e.g. http://hermes-agent_ollama:11434   (NO /v1 suffix — LiteLLM's
+#                     ollama provider appends the right path itself)
+#   ANTHROPIC_API_KEY hosted Claude key for the fallback path
+#
+# HA / scaling: add more Ollama replicas by listing additional `yt-llm` entries
+# (one per api_base) — LiteLLM load-balances across same-named deployments. See
+# LLM_GATEWAY_NOTES.md.
+
+model_list:
+  # ── Primary: local Ollama, exposed under the served name `yt-llm` ────────────
+  - model_name: yt-llm
+    litellm_params:
+      model: ollama/qwen2.5
+      api_base: os.environ/OLLAMA_BASE_URL
+      # Per-deployment timeout (s). Aligns with the app's LOCAL_TIMEOUT_MS=120000.
+      timeout: 120
+
+  # Also expose the bare local model under its own name, so callers that still
+  # send `qwen2.5` keep working (backward-compatible).
+  - model_name: qwen2.5
+    litellm_params:
+      model: ollama/qwen2.5
+      api_base: os.environ/OLLAMA_BASE_URL
+      timeout: 120
+
+  # ── Fallback: hosted Claude (Anthropic) ─────────────────────────────────────
+  # Reached only when a local deployment fails or times out (see router_settings
+  # fallbacks below). claude-haiku-4-5 is the cheapest current Claude model — a
+  # sensible cost-bounded fallback. The exact model id is the complete alias
+  # (do NOT append a date suffix).
+  - model_name: claude-fallback
+    litellm_params:
+      model: anthropic/claude-haiku-4-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+      timeout: 120
+
+litellm_settings:
+  # Total request timeout (s) — give the local box room; the app's own
+  # LOCAL_TIMEOUT_MS=120000 is the outer bound.
+  request_timeout: 120
+  # Retry a failed call on the SAME model before giving up / falling back.
+  num_retries: 1
+  # Drop OpenAI-only params Ollama doesn't understand instead of erroring
+  # (e.g. response_format on models that don't support it).
+  drop_params: true
+
+router_settings:
+  # On a local failure/timeout, route to the Claude fallback. Keyed by the
+  # served model name → list of fallbacks.
+  fallbacks:
+    - yt-llm: ["claude-fallback"]
+    - qwen2.5: ["claude-fallback"]
+  # Retry transient errors before invoking the fallback chain.
+  num_retries: 1
+  # Retry policy: how many attempts per error class before failing over.
+  retry_policy:
+    TimeoutErrorRetries: 1
+    InternalServerErrorRetries: 1
+  allowed_fails: 2
+  # Cool a deployment down briefly after repeated fails so traffic shifts to the
+  # fallback (and back once the local model recovers).
+  cooldown_time: 30
+
+# NOTE: no `general_settings.master_key` is set — the proxy is only reachable on
+# the internal `yt-prod` overlay (not published to the host), and the app sends
+# no auth (LLM_API_KEY is unset). If you later publish the port or want
+# per-caller keys, add general_settings.master_key and set LLM_API_KEY on the app.
