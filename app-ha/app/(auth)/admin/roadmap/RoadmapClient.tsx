@@ -49,15 +49,21 @@ function formatTimestamp(iso: string): string {
   })
 }
 
-// Admin-only update thread for a single roadmap item. Renders existing
-// comments (oldest at top, newest at bottom) plus an "Add update" composer.
-function UpdatesThread({ itemKey, comments }: { itemKey: number; comments: RoadmapComment[] }) {
+// A single roadmap item rendered as a collapsible dropdown. The whole header
+// row is the click target; expanding reveals the admin-only update log (each
+// note = author • timestamp • body, with per-note delete) plus an "Add update"
+// composer. Collapsed by default.
+function RoadmapItemCard({ item, comments }: { item: RoadmapItem; comments: RoadmapComment[] }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
+  const [hover, setHover] = useState(false)
   const [body, setBody] = useState('')
   const [posting, setPosting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const ps = PRIORITY_STYLE[item.priority]
+  const ss = STATUS_STYLE[item.status]
+  const isComplete = item.status === 'completed'
   const count = comments.length
 
   const post = async () => {
@@ -69,7 +75,7 @@ function UpdatesThread({ itemKey, comments }: { itemKey: number; comments: Roadm
       const res = await fetch('/api/admin/roadmap/comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemKey, body: trimmed }),
+        body: JSON.stringify({ itemKey: item.id, body: trimmed }),
       })
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
@@ -101,121 +107,42 @@ function UpdatesThread({ itemKey, comments }: { itemKey: number; comments: Roadm
   }
 
   return (
-    <div style={{ marginTop: '8px', borderTop: '0.5px solid #1e1e1e', paddingTop: '8px' }}>
-      {/* Toggle */}
-      <div
-        onClick={() => setOpen(o => !o)}
-        role="button"
-        tabIndex={0}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: '6px',
-          cursor: 'pointer', fontSize: '11px', color: 'var(--text-secondary)',
-          userSelect: 'none',
-        }}
-      >
-        <span style={{ fontFamily: 'monospace', color: '#555' }}>{open ? '▾' : '▸'}</span>
-        <span>Updates</span>
-        {count > 0 && (
-          <span style={{
-            fontSize: '10px', fontWeight: 700, padding: '0px 6px', borderRadius: '8px',
-            color: '#60a5fa', background: 'rgba(96,165,250,0.08)', border: '0.5px solid rgba(96,165,250,0.2)',
-          }}>
-            {count}
-          </span>
-        )}
-      </div>
-
-      {open && (
-        <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {/* Thread */}
-          {count === 0 ? (
-            <span style={{ fontSize: '11px', color: '#444' }}>No updates yet.</span>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {comments.map(c => (
-                <div
-                  key={c.id}
-                  style={{
-                    background: 'rgba(255,255,255,0.02)',
-                    border: '0.5px solid #1e1e1e',
-                    borderRadius: '5px',
-                    padding: '8px 10px',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>{c.authorName}</span>
-                    <span style={{ fontSize: '10px', color: '#444', fontFamily: 'monospace' }}>{formatTimestamp(c.createdAt)}</span>
-                    <span
-                      onClick={() => remove(c.id)}
-                      role="button"
-                      tabIndex={0}
-                      title="Delete update"
-                      style={{ marginLeft: 'auto', fontSize: '11px', color: '#444', cursor: 'pointer' }}
-                      onMouseEnter={e => { e.currentTarget.style.color = '#ef4444' }}
-                      onMouseLeave={e => { e.currentTarget.style.color = '#444' }}
-                    >
-                      ✕
-                    </span>
-                  </div>
-                  <p style={{ fontSize: '12px', color: '#aaa', margin: 0, lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{c.body}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Composer */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <textarea
-              value={body}
-              onChange={e => setBody(e.target.value)}
-              placeholder="Add an update…"
-              rows={2}
-              style={{
-                width: '100%', boxSizing: 'border-box', resize: 'vertical',
-                background: 'var(--bg-base)', color: 'var(--text-primary)',
-                border: '0.5px solid var(--nav-border)', borderRadius: '5px',
-                padding: '8px 10px', fontSize: '12px', lineHeight: '1.5',
-                fontFamily: 'inherit',
-              }}
-            />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <button
-                onClick={post}
-                disabled={posting || !body.trim()}
-                style={{
-                  fontSize: '11px', fontWeight: 600,
-                  color: posting || !body.trim() ? '#555' : '#60a5fa',
-                  background: 'rgba(96,165,250,0.08)',
-                  border: '0.5px solid rgba(96,165,250,0.2)',
-                  borderRadius: '5px', padding: '5px 12px',
-                  cursor: posting || !body.trim() ? 'default' : 'pointer',
-                }}
-              >
-                {posting ? 'Posting…' : 'Post update'}
-              </button>
-              {error && <span style={{ fontSize: '11px', color: '#ef4444' }}>{error}</span>}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function RoadmapItemCard({ item, comments }: { item: RoadmapItem; comments: RoadmapComment[] }) {
-  const ps = PRIORITY_STYLE[item.priority]
-  const ss = STATUS_STYLE[item.status]
-  const isComplete = item.status === 'completed'
-  return (
     <div style={{
       background: '#0d0d0d',
       border: '0.5px solid #1e1e1e',
       borderLeft: `3px solid ${ps.leftBorder}`,
       borderRadius: '6px',
-      padding: '12px 16px',
       opacity: isComplete ? 0.6 : 1,
+      overflow: 'hidden',
     }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+      {/* Header row — the entire row is the dropdown toggle */}
+      <div
+        onClick={() => setOpen(o => !o)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setOpen(o => !o)
+          }
+        }}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        style={{
+          display: 'flex', alignItems: 'flex-start', gap: '14px',
+          padding: '12px 16px',
+          cursor: 'pointer',
+          userSelect: 'none',
+          background: hover ? 'rgba(255,255,255,0.025)' : 'transparent',
+          transition: 'background 0.12s',
+        }}
+      >
+        {/* Chevron */}
+        <span style={{ fontSize: '11px', color: '#555', fontFamily: 'monospace', flexShrink: 0, marginTop: '2px' }}>
+          {open ? '▾' : '▸'}
+        </span>
+
         {/* ID */}
         <span style={{ fontSize: '11px', color: '#444', fontFamily: 'monospace', flexShrink: 0, marginTop: '2px', width: '28px' }}>
           #{item.id}
@@ -239,6 +166,16 @@ function RoadmapItemCard({ item, comments }: { item: RoadmapItem; comments: Road
             }}>
               {ps.label}
             </span>
+            {/* Updates count pill — visible without expanding */}
+            {count > 0 && (
+              <span style={{
+                fontSize: '10px', fontWeight: 700, padding: '0px 6px', borderRadius: '8px',
+                color: '#60a5fa', background: 'rgba(96,165,250,0.08)', border: '0.5px solid rgba(96,165,250,0.2)',
+                flexShrink: 0,
+              }}>
+                {count}
+              </span>
+            )}
           </div>
           <p style={{ fontSize: '12px', color: '#555', margin: 0, lineHeight: '1.55' }}>
             {item.description}
@@ -258,8 +195,91 @@ function RoadmapItemCard({ item, comments }: { item: RoadmapItem; comments: Road
         </div>
       </div>
 
-      {/* Admin-only update thread */}
-      <UpdatesThread itemKey={item.id} comments={comments} />
+      {/* Dropdown panel — updates log + composer. Stop click/keydown from
+          bubbling to the header so interacting here never collapses the row. */}
+      {open && (
+        <div
+          onClick={e => e.stopPropagation()}
+          onKeyDown={e => e.stopPropagation()}
+          style={{
+            padding: '0 16px 12px',
+            borderTop: '0.5px solid #1e1e1e',
+            display: 'flex', flexDirection: 'column', gap: '8px',
+          }}
+        >
+          <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {/* Thread */}
+            {count === 0 ? (
+              <span style={{ fontSize: '11px', color: '#444' }}>No updates yet.</span>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {comments.map(c => (
+                  <div
+                    key={c.id}
+                    style={{
+                      background: 'rgba(255,255,255,0.02)',
+                      border: '0.5px solid #1e1e1e',
+                      borderRadius: '5px',
+                      padding: '8px 10px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>{c.authorName}</span>
+                      <span style={{ fontSize: '10px', color: '#444', fontFamily: 'monospace' }}>{formatTimestamp(c.createdAt)}</span>
+                      <span
+                        onClick={() => remove(c.id)}
+                        role="button"
+                        tabIndex={0}
+                        title="Delete update"
+                        style={{ marginLeft: 'auto', fontSize: '11px', color: '#444', cursor: 'pointer' }}
+                        onMouseEnter={e => { e.currentTarget.style.color = '#ef4444' }}
+                        onMouseLeave={e => { e.currentTarget.style.color = '#444' }}
+                      >
+                        ✕
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '12px', color: '#aaa', margin: 0, lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{c.body}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Composer */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <textarea
+                value={body}
+                onChange={e => setBody(e.target.value)}
+                placeholder="Add an update…"
+                rows={2}
+                style={{
+                  width: '100%', boxSizing: 'border-box', resize: 'vertical',
+                  background: 'var(--bg-base)', color: 'var(--text-primary)',
+                  border: '0.5px solid var(--nav-border)', borderRadius: '5px',
+                  padding: '8px 10px', fontSize: '12px', lineHeight: '1.5',
+                  fontFamily: 'inherit',
+                }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <button
+                  onClick={post}
+                  disabled={posting || !body.trim()}
+                  style={{
+                    fontSize: '11px', fontWeight: 600,
+                    color: posting || !body.trim() ? '#555' : '#60a5fa',
+                    background: 'rgba(96,165,250,0.08)',
+                    border: '0.5px solid rgba(96,165,250,0.2)',
+                    borderRadius: '5px', padding: '5px 12px',
+                    cursor: posting || !body.trim() ? 'default' : 'pointer',
+                  }}
+                >
+                  {posting ? 'Posting…' : 'Post update'}
+                </button>
+                {error && <span style={{ fontSize: '11px', color: '#ef4444' }}>{error}</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
