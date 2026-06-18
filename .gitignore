@@ -49,3 +49,18 @@ next-env.d.ts
 
 __pycache__/
 *.pyc
+
+# ── Generated docs / design artifacts (local working files, not source) ──
+/*.pdf
+/site_map_diagram.png
+design_mockup_*.html
+DESIGN_SELECTION.html
+create_ha_pdf.js
+create_*_pdf*.py
+*_gen.py
+
+# ── Machine-local / sensitive — must NEVER be committed ──
+.claude/
+memory/
+scripts/get-creds.sh
+deploy/REDEPLOY-MONITORING-STORAGE.md
