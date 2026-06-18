@@ -73,7 +73,10 @@ BEGIN
   END IF;
 END
 $$;
-ALTER ROLE authenticator WITH LOGIN NOINHERIT PASSWORD :'authenticator_password';
+-- :authenticator_password (RAW, no extra quotes) — the caller passes it already
+-- single-quoted via printf "'%s'". Using :'var' here would double-quote it and
+-- store the quotes as part of the password (auth then fails).
+ALTER ROLE authenticator WITH LOGIN NOINHERIT PASSWORD :authenticator_password;
 
 -- ── authenticator may SET ROLE to each app role ───────────────────────────────
 -- GRANT role TO authenticator is idempotent (no-op if already a member).
