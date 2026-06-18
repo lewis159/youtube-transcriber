@@ -1,0 +1,80 @@
+# Starter Prometheus alert rules for the YT Transcriber estate.
+# Mounted as /etc/prometheus/alert-rules.yml. Tune thresholds per box.
+
+groups:
+  - name: node-health
+    rules:
+      # A node's exporter has been unreachable for 2m => node (or exporter) down.
+      - alert: NodeDown
+        expr: up{job="node-exporter"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node exporter down ({{ $labels.instance }})"
+          description: "node-exporter on {{ $labels.instance }} has been unreachable for >2m. The node may be down."
+
+      # Sustained high CPU (>90% busy over 5m).
+      - alert: HighCpuUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU on {{ $labels.instance }}"
+          description: "CPU usage > 90% for 5m on {{ $labels.instance }} (current: {{ printf \"%.0f\" $value }}%)."
+
+      # High memory / OOM risk: <10% available memory for 5m.
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low available memory on {{ $labels.instance }}"
+          description: "Available memory < 10% for 5m on {{ $labels.instance }} — OOM risk."
+
+      # Disk pressure: root filesystem < 15% free.
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) * 100 < 15
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+          description: "Filesystem {{ $labels.mountpoint }} on {{ $labels.instance }} below 15% free."
+
+  - name: container-health
+    rules:
+      # Container restart loop: a container restarted in the last 5m and is
+      # restarting faster than once per ~15m (cadvisor restart counter).
+      - alert: ContainerRestartLoop
+        expr: increase(container_start_time_seconds{name=~".+"}[5m]) > 1
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container restart loop ({{ $labels.name }})"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} restarted more than once in 5m."
+
+      # Container using >90% of its memory limit (OOM-kill risk for that task).
+      - alert: ContainerHighMemory
+        expr: (container_memory_usage_bytes{name=~".+"} / container_spec_memory_limit_bytes{name=~".+"} > 0.9) and (container_spec_memory_limit_bytes{name=~".+"} > 0)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container near memory limit ({{ $labels.name }})"
+          description: "Container {{ $labels.name }} > 90% of its memory limit for 5m."
+
+  - name: scrape-health
+    rules:
+      # Any scrape target down for 2m (catch-all incl. cadvisor / app /metrics).
+      - alert: TargetDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Scrape target down ({{ $labels.job }} / {{ $labels.instance }})"
+          description: "Prometheus target {{ $labels.instance }} for job {{ $labels.job }} has been down for >2m."
