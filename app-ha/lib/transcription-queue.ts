@@ -62,7 +62,13 @@ function parseSentinelUrl(url: string): ConnectionOptions {
   // Support the documented `sentinelName`; also accept `name` as an alias.
   const name = params.get('sentinelName') || params.get('name') || 'mymaster'
 
-  return { sentinels, name, db } as unknown as ConnectionOptions
+  // Optional auth: the same password authenticates BOTH the Sentinels
+  // (`sentinelPassword`) and the discovered data nodes (`password`). When unset,
+  // omit both so the no-auth setup behaves exactly as before.
+  const pwd = process.env.REDIS_PASSWORD
+  const auth = pwd ? { password: pwd, sentinelPassword: pwd } : {}
+
+  return { sentinels, name, db, ...auth } as unknown as ConnectionOptions
 }
 
 /** Split a string on the first occurrence of `sep` only. */
@@ -81,17 +87,23 @@ function splitOnce(s: string, sep: string): [string, string?] {
  *                         docker service name so it "just works" in compose).
  */
 function getConnection(): ConnectionOptions {
+  // Optional auth: when unset/empty, omit `password` so the no-auth setup
+  // behaves exactly as before.
+  const pwd = process.env.REDIS_PASSWORD
+  const auth = pwd ? { password: pwd } : {}
+
   const url = process.env.REDIS_URL
   if (url) {
     if (url.startsWith('sentinel://')) {
       return parseSentinelUrl(url)
     }
-    return { url } as unknown as ConnectionOptions
+    return { url, ...auth } as unknown as ConnectionOptions
   }
 
   return {
     host: process.env.REDIS_HOST || 'redis-master',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    ...auth,
   }
 }
 
