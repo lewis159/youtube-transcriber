@@ -22,7 +22,13 @@ services:
       - STRIPE_PRICE_STUDIO=${STRIPE_PRICE_STUDIO}
       - STRIPE_PRICE_ENTERPRISE=${STRIPE_PRICE_ENTERPRISE}
       - NEXT_PUBLIC_APP_URL=https://yt.bentech.dev
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      # ── Redis HA via Sentinel ──
+      # App discovers the CURRENT master through Sentinel (service
+      # `redis-failover`, port 26379) rather than pinning a single redis host.
+      # Master name `mymaster`, quorum 2. The single password is in REDIS_PASSWORD.
+      # See docker-compose.redis.yml + REDIS_HA_NOTES.md.
+      - REDIS_URL=sentinel://redis-failover:26379/0?sentinelName=mymaster
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
       # Admin container monitor talks to Docker via the read-only socket proxy,
       # never the raw socket (security finding #9).
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
@@ -109,19 +115,117 @@ services:
     networks:
       - yt-prod
 
-  redis:
+  # ── Redis HA topology (Sentinel-managed primary/standby) ────────────────────
+  # Replaces the old single `redis` service. Three services on yt-prod:
+  #   redis-primary  — the master (AOF + auth)
+  #   redis-standby  — replica of primary (auto-resyncs, can be promoted)
+  #   redis-failover — Redis Sentinel; monitors mymaster, runs failover (quorum 2)
+  #
+  # Placement uses SOFT preferences (spread by node.id), NOT hard constraints, so
+  # the whole stack still schedules on a single node TODAY and naturally spreads
+  # when host #2 joins the Swarm. For GUARANTEED anti-affinity on 2 hosts, switch
+  # to node-label constraints — see REDIS_HA_NOTES.md ("node-label hardening").
+  redis-primary:
     image: redis:7-alpine
-    command: redis-server --save 60 1 --loglevel warning
+    command: >-
+      redis-server --appendonly yes --appendfsync everysec
+      --maxmemory 512mb --maxmemory-policy noeviction
+      --requirepass ${REDIS_PASSWORD} --masterauth ${REDIS_PASSWORD}
+      --loglevel warning
     volumes:
-      - redis-data:/data
+      - redis-primary-data:/data
     deploy:
       replicas: 1
+      placement:
+        preferences:
+          - spread: node.id
       labels:
         - "project=YT_Transcription"
-        - "project.component=redis"
+        - "project.component=redis-primary"
         - "project.env=prod"
       restart_policy:
         condition: on-failure
+      resources:
+        limits:
+          # Slightly above --maxmemory 512mb to leave headroom for AOF buffers
+          # / replication backlog / copy-on-write during BGSAVE.
+          memory: 640M
+    networks:
+      - yt-prod
+
+  redis-standby:
+    image: redis:7-alpine
+    # Same persistence + auth flags as the primary PLUS --replicaof so it joins
+    # as a replica. On a Sentinel-driven failover this node may be PROMOTED to
+    # master, so it must carry masterauth/requirepass identically.
+    command: >-
+      redis-server --appendonly yes --appendfsync everysec
+      --maxmemory 512mb --maxmemory-policy noeviction
+      --requirepass ${REDIS_PASSWORD} --masterauth ${REDIS_PASSWORD}
+      --replicaof redis-primary 6379
+      --loglevel warning
+    volumes:
+      - redis-standby-data:/data
+    deploy:
+      replicas: 1
+      placement:
+        preferences:
+          - spread: node.id
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=redis-standby"
+        - "project.env=prod"
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 640M
+    networks:
+      - yt-prod
+
+  # Redis Sentinel. mode: global => exactly one Sentinel per Swarm node, so the
+  # Sentinel count grows with the cluster (1 today, 2 when host #2 joins). Quorum
+  # is 2: a 2-node cluster gives 2 Sentinels, enough to agree on a failover.
+  #
+  # Sentinel REWRITES its own config file at runtime (it persists discovered
+  # replicas / the current epoch). Multiple containers therefore MUST NOT share a
+  # single bind-mounted file. We generate a fresh, per-instance writable config in
+  # /tmp at container start instead of bind-mounting one.
+  #
+  # ⚠️  announce-ip on Swarm: each Sentinel advertises its OWN overlay IP
+  # (hostname -i). `sentinel resolve-hostnames yes` lets it monitor the
+  # `redis-primary` SERVICE NAME on the overlay. This announce-ip approach MUST
+  # be validated with a REAL failover drill on multi-node Swarm before trusting
+  # it in prod — see REDIS_HA_NOTES.md ("Failover drill").
+  redis-failover:
+    image: redis:7-alpine
+    command:
+      - sh
+      - -c
+      - |
+        cat > /tmp/sentinel.conf <<EOF
+        port 26379
+        sentinel monitor mymaster redis-primary 6379 2
+        sentinel auth-pass mymaster ${REDIS_PASSWORD}
+        sentinel down-after-milliseconds mymaster 5000
+        sentinel failover-timeout mymaster 10000
+        sentinel parallel-syncs mymaster 1
+        requirepass ${REDIS_PASSWORD}
+        sentinel resolve-hostnames yes
+        sentinel announce-ip "$(hostname -i | awk '{print $1}')"
+        EOF
+        exec redis-server /tmp/sentinel.conf --sentinel
+    deploy:
+      mode: global
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=redis-failover"
+        - "project.env=prod"
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 64M
     networks:
       - yt-prod
 
@@ -158,10 +262,14 @@ services:
   whisper-worker:
     image: ghcr.io/lewis159/youtube-transcriber-worker:latest
     environment:
-      # ── Redis: single `redis` service for this deploy (no Sentinel) ──
-      # Points at the prod `redis` service on the yt-prod network. Overridable
-      # via ${REDIS_URL} for a future Sentinel/HA topology.
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      # ── Redis HA via Sentinel ──
+      # Worker discovers the current master through Sentinel (`redis-failover`)
+      # rather than a fixed redis host. Master name `mymaster`, quorum 2.
+      # NOTE: the Python BullMQ client does not follow a master that moves at
+      # runtime — on a Sentinel failover the worker exits and Swarm restarts it,
+      # at which point it re-discovers the new master (see restart_policy below).
+      - REDIS_URL=sentinel://redis-failover:26379/0?sentinelName=mymaster
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
       # ── Supabase (service-role key bypasses RLS) ──
       # SUPABASE_URL reuses the same project URL the app gets via
       # NEXT_PUBLIC_SUPABASE_URL; the worker also accepts SUPABASE_SERVICE_ROLE_KEY.
@@ -217,7 +325,8 @@ services:
       - yt-prod
 
 volumes:
-  redis-data:
+  redis-primary-data:
+  redis-standby-data:
   whisper-cache:
 
 networks:

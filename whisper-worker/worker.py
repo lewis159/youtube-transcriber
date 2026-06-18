@@ -583,6 +583,11 @@ def _redis_connection():
     That is the pragmatic mitigation until/unless the Python BullMQ client gains
     native Sentinel support.
     """
+    # Optional auth: the same password authenticates BOTH the Sentinels and the
+    # discovered master/replica data nodes. When unset/empty, behave exactly as
+    # before (no auth).
+    pwd = os.environ.get("REDIS_PASSWORD") or None
+
     url = os.environ.get("REDIS_URL")
     if url and url.startswith("sentinel://"):
         from redis.sentinel import Sentinel
@@ -590,15 +595,30 @@ def _redis_connection():
         sentinels, master_name, db = _parse_sentinel_url(url)
         log.info("resolving Redis master via Sentinel: name=%s sentinels=%s db=%d",
                  master_name, sentinels, db)
-        sentinel = Sentinel(sentinels, socket_timeout=1.0)
+        # sentinel_kwargs authenticates to the Sentinels themselves; `password`
+        # authenticates to the discovered master/replica.
+        sentinel_kwargs = {"socket_timeout": 1.0}
+        connection_kwargs = {}
+        if pwd:
+            sentinel_kwargs["password"] = pwd
+            connection_kwargs["password"] = pwd
+        sentinel = Sentinel(sentinels, sentinel_kwargs=sentinel_kwargs,
+                            **connection_kwargs)
         master_host, master_port = sentinel.discover_master(master_name)
         log.info("Sentinel reports current master at %s:%s", master_host, master_port)
+        # Embed the password in the URL handed to BullMQ so its direct
+        # connection to the resolved master authenticates too.
+        if pwd:
+            return {"connection": "redis://:{}@{}:{}/{}".format(
+                pwd, master_host, master_port, db)}
         return {"connection": "redis://{}:{}/{}".format(master_host, master_port, db)}
 
     if url:
         return {"connection": url}
     host = os.environ.get("REDIS_HOST", "redis-master")
     port = os.environ.get("REDIS_PORT", "6379")
+    if pwd:
+        return {"connection": "redis://:{}@{}:{}".format(pwd, host, port)}
     return {"connection": "redis://{}:{}".format(host, port)}
 
 

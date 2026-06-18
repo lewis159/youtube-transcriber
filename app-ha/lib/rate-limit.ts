@@ -66,7 +66,13 @@ function parseSentinelUrl(url: string): RedisOptions {
   const params = new URLSearchParams(queryStr)
   const name = params.get('sentinelName') || params.get('name') || 'mymaster'
 
-  return { sentinels, name, db }
+  // Optional auth: the same password authenticates BOTH the Sentinels
+  // (`sentinelPassword`) and the discovered data nodes (`password`). When unset,
+  // omit both so the no-auth setup behaves exactly as before.
+  const pwd = process.env.REDIS_PASSWORD
+  const auth = pwd ? { password: pwd, sentinelPassword: pwd } : {}
+
+  return { sentinels, name, db, ...auth }
 }
 
 /**
@@ -76,18 +82,24 @@ function parseSentinelUrl(url: string): RedisOptions {
 function getClient(): Redis {
   if (client) return client
 
+  // Optional auth: when unset/empty, omit `password` so the no-auth setup
+  // behaves exactly as before.
+  const pwd = process.env.REDIS_PASSWORD
+  const auth = pwd ? { password: pwd } : {}
+
   const url = process.env.REDIS_URL
   if (url) {
     if (url.startsWith('sentinel://')) {
       client = new Redis(parseSentinelUrl(url))
     } else {
       // `redis://...` connection string.
-      client = new Redis(url, { maxRetriesPerRequest: null, lazyConnect: false })
+      client = new Redis(url, { maxRetriesPerRequest: null, lazyConnect: false, ...auth })
     }
   } else {
     client = new Redis({
       host: process.env.REDIS_HOST || 'redis-master',
       port: parseInt(process.env.REDIS_PORT || '6379', 10),
+      ...auth,
     })
   }
 

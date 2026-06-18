@@ -1,142 +1,140 @@
 version: '3.9'
 
+# ─────────────────────────────────────────────────────────────────────────────
+# STANDALONE REDIS HA REFERENCE STACK (Docker Swarm)
+#
+#   ⚠️  The CANONICAL production Redis definition lives in
+#       docker-compose.prod.yml (services redis-primary / redis-standby /
+#       redis-failover on the `yt-prod` overlay, alongside app + worker).
+#
+#   This file is a SELF-CONTAINED reference / local-test variant of the SAME
+#   topology so the Redis HA tier can be read, reasoned about, and deployed
+#   independently (e.g. to drill a failover) WITHOUT bringing up the whole app.
+#
+# Topology (mirrors prod exactly):
+#   redis-primary   — master  (AOF everysec, noeviction, password auth)
+#   redis-standby   — replica of primary (auto-resync, promotable)
+#   redis-failover  — Redis Sentinel, mode: global, monitors mymaster, quorum 2
+#
+# Fixes vs the OLD docker-compose.redis.yml:
+#   • bridge network  → overlay (Swarm-ready)
+#   • plain `restart:` → `deploy.restart_policy` (Swarm honours deploy, not restart)
+#   • --slaveof        → modern --replicaof
+#   • no auth          → --requirepass + --masterauth + sentinel auth-pass
+#   • RDB only         → AOF (appendonly yes, appendfsync everysec) + noeviction
+#   • shared bind-mounted sentinel.conf → per-instance config generated at start
+#     (Sentinel rewrites its own config; containers must not share one file)
+#
+# Deploy (Swarm):   docker stack deploy -c docker-compose.redis.yml redis-ha
+# Requires env:     REDIS_PASSWORD must be exported in the deploying shell, e.g.
+#                   REDIS_PASSWORD=... docker stack deploy -c ... redis-ha
+# ─────────────────────────────────────────────────────────────────────────────
+
 services:
-  # Redis Master
-  redis-master:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --appendfilename "appendonly.aof"
-    volumes:
-      - redis-master-data:/data
-    restart: unless-stopped
-    networks:
-      - youtube-transcriber-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
 
-  # Redis Slave 1
-  redis-slave-1:
+  redis-primary:
     image: redis:7-alpine
-    ports:
-      - "6380:6379"
-    command: redis-server --slaveof redis-master 6379 --appendonly yes --appendfilename "appendonly-slave-1.aof"
+    command: >-
+      redis-server --appendonly yes --appendfsync everysec
+      --maxmemory 512mb --maxmemory-policy noeviction
+      --requirepass ${REDIS_PASSWORD} --masterauth ${REDIS_PASSWORD}
+      --loglevel warning
     volumes:
-      - redis-slave-1-data:/data
-    depends_on:
-      - redis-master
-    restart: unless-stopped
+      - redis-primary-data:/data
+    deploy:
+      replicas: 1
+      # Soft spread so it schedules on 1 node now and spreads when host #2 joins.
+      # Switch to node-label constraints for guaranteed anti-affinity (see notes).
+      placement:
+        preferences:
+          - spread: node.id
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=redis-primary"
+        - "project.env=prod"
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 640M
     networks:
-      - youtube-transcriber-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      - redis-ha
 
-  # Redis Slave 2
-  redis-slave-2:
+  redis-standby:
     image: redis:7-alpine
-    ports:
-      - "6381:6379"
-    command: redis-server --slaveof redis-master 6379 --appendonly yes --appendfilename "appendonly-slave-2.aof"
+    # Same persistence + auth as primary PLUS --replicaof. May be promoted to
+    # master on failover, so it must carry masterauth/requirepass identically.
+    command: >-
+      redis-server --appendonly yes --appendfsync everysec
+      --maxmemory 512mb --maxmemory-policy noeviction
+      --requirepass ${REDIS_PASSWORD} --masterauth ${REDIS_PASSWORD}
+      --replicaof redis-primary 6379
+      --loglevel warning
     volumes:
-      - redis-slave-2-data:/data
-    depends_on:
-      - redis-master
-    restart: unless-stopped
+      - redis-standby-data:/data
+    deploy:
+      replicas: 1
+      placement:
+        preferences:
+          - spread: node.id
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=redis-standby"
+        - "project.env=prod"
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 640M
     networks:
-      - youtube-transcriber-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      - redis-ha
 
-  # Sentinel 1
-  sentinel-1:
+  # Redis Sentinel. mode: global => one Sentinel per node (count grows with the
+  # cluster). Quorum 2. Generates a per-instance writable config at start because
+  # Sentinel rewrites its own config at runtime (no shared bind mount).
+  #
+  # ⚠️  announce-ip on Swarm: each Sentinel advertises its OWN overlay IP and uses
+  # `sentinel resolve-hostnames yes` to monitor the `redis-primary` service name.
+  # VALIDATE with a real failover drill before trusting in prod (see notes).
+  redis-failover:
     image: redis:7-alpine
-    ports:
-      - "26379:26379"
-    command: redis-sentinel /etc/sentinel/sentinel-1.conf
-    volumes:
-      - ./sentinel-1.conf:/etc/sentinel/sentinel-1.conf
-      - sentinel-1-data:/data
-    depends_on:
-      - redis-master
-      - redis-slave-1
-      - redis-slave-2
-    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - |
+        cat > /tmp/sentinel.conf <<EOF
+        port 26379
+        sentinel monitor mymaster redis-primary 6379 2
+        sentinel auth-pass mymaster ${REDIS_PASSWORD}
+        sentinel down-after-milliseconds mymaster 5000
+        sentinel failover-timeout mymaster 10000
+        sentinel parallel-syncs mymaster 1
+        requirepass ${REDIS_PASSWORD}
+        sentinel resolve-hostnames yes
+        sentinel announce-ip "$(hostname -i | awk '{print $1}')"
+        EOF
+        exec redis-server /tmp/sentinel.conf --sentinel
+    deploy:
+      mode: global
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=redis-failover"
+        - "project.env=prod"
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 64M
     networks:
-      - youtube-transcriber-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-  # Sentinel 2
-  sentinel-2:
-    image: redis:7-alpine
-    ports:
-      - "26380:26379"
-    command: redis-sentinel /etc/sentinel/sentinel-1.conf --port 26379
-    volumes:
-      - ./sentinel-1.conf:/etc/sentinel/sentinel-1.conf
-      - sentinel-2-data:/data
-    depends_on:
-      - redis-master
-      - redis-slave-1
-      - redis-slave-2
-    restart: unless-stopped
-    networks:
-      - youtube-transcriber-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-  # Sentinel 3
-  sentinel-3:
-    image: redis:7-alpine
-    ports:
-      - "26381:26379"
-    command: redis-sentinel /etc/sentinel/sentinel-1.conf --port 26379
-    volumes:
-      - ./sentinel-1.conf:/etc/sentinel/sentinel-1.conf
-      - sentinel-3-data:/data
-    depends_on:
-      - redis-master
-      - redis-slave-1
-      - redis-slave-2
-    restart: unless-stopped
-    networks:
-      - youtube-transcriber-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      - redis-ha
 
 volumes:
-  redis-master-data:
-  redis-slave-1-data:
-  redis-slave-2-data:
-  sentinel-1-data:
-  sentinel-2-data:
-  sentinel-3-data:
+  redis-primary-data:
+  redis-standby-data:
 
 networks:
-  youtube-transcriber-network:
-    driver: bridge
-    external: true
+  # Overlay so Sentinel + nodes resolve each other across the Swarm. Attachable
+  # so you can exec a throwaway redis-cli container onto the net for drills.
+  redis-ha:
+    driver: overlay
+    attachable: true
