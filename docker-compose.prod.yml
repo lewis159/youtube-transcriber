@@ -33,11 +33,19 @@ services:
       # never the raw socket (security finding #9).
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
       # ── Pluggable LLM provider (summaries + Q&A chat) ──
-      # Local Hermes Ollama reached over the external Hermes Swarm network.
-      # See app-ha/lib/llm.ts: LLM_PROVIDER / LLM_BASE_URL / LLM_MODEL.
+      # The app still thinks it's calling a local OpenAI-compatible endpoint —
+      # but that endpoint is now the LiteLLM HA gateway (service `litellm`,
+      # :4000), NOT Ollama directly. LiteLLM load-balances across Ollama replicas
+      # and FALLS BACK to hosted Claude on local failure/timeout.
+      # See app-ha/lib/llm.ts (LLM_PROVIDER / LLM_BASE_URL / LLM_MODEL) and
+      # deploy/litellm-config.yaml + LLM_GATEWAY_NOTES.md.
       - LLM_PROVIDER=local
-      - LLM_BASE_URL=http://hermes-agent_ollama:11434/v1
-      - LLM_MODEL=qwen2.5
+      - LLM_BASE_URL=http://litellm:4000/v1
+      # Served model name exposed by LiteLLM (qwen2.5-with-Claude-fallback).
+      - LLM_MODEL=yt-llm
+      # Passed through so the per-user "hosted" toggle in lib/claude.ts (which
+      # constructs the Anthropic SDK directly, NOT via LiteLLM) keeps working.
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
     deploy:
       replicas: 2
       labels:
@@ -64,6 +72,60 @@ services:
     networks:
       - yt-prod
       - proxy
+
+  # ── LiteLLM HA gateway ──────────────────────────────────────────────────────
+  # One OpenAI-compatible endpoint (:4000) in front of Ollama. Load-balances
+  # across Ollama replicas (1 today, N later — see LLM_GATEWAY_NOTES.md) and
+  # falls back to hosted Claude (Anthropic) on local failure/timeout. The app
+  # talks to THIS, not Ollama directly (LLM_BASE_URL=http://litellm:4000/v1).
+  #
+  # ⚠️ NETWORK REQUIREMENT (deploy decision — DO NOT assume): LiteLLM must reach
+  # the Ollama service. The default OLLAMA_BASE_URL points at the Hermes stack's
+  # Ollama (hermes-agent_ollama), which lives on the `hermes-agent_hermes-net`
+  # overlay — but a prior PR removed that external network from THIS stack, so
+  # litellm cannot currently reach it as written. Before deploy, pick ONE:
+  #   (a) join litellm to the external `hermes-agent_hermes-net` overlay (it must
+  #       be created `--attachable`); add it to this service's `networks:` and to
+  #       the top-level `networks:` block as `external: true`; OR
+  #   (b) run a dedicated Ollama service inside this stack on `yt-prod` and point
+  #       OLLAMA_BASE_URL at it.
+  # This is flagged, not silently resolved — see LLM_GATEWAY_NOTES.md.
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
+    environment:
+      # Hosted Claude key for the fallback path.
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # Ollama base URL — NO /v1 suffix (LiteLLM's ollama provider adds the path).
+      # Default targets the Hermes stack's Ollama; override per the network
+      # decision above.
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://hermes-agent_ollama:11434}
+    configs:
+      - source: litellm-config
+        target: /etc/litellm/config.yaml
+    deploy:
+      replicas: 1
+      placement:
+        preferences:
+          - spread: node.id
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=litellm"
+        - "project.env=prod"
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4000/health/liveliness || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - yt-prod
 
   # Tecnativa docker-socket-proxy: the ONLY service that touches the real
   # Docker socket. It exposes a locked-down HTTP API on :2375 to the app on the
@@ -328,6 +390,14 @@ volumes:
   redis-primary-data:
   redis-standby-data:
   whisper-cache:
+
+# Swarm config object: the LiteLLM proxy config, mounted read-only at
+# /etc/litellm/config.yaml in the litellm service. Portainer reads this file
+# relative to the stack on deploy. Editing the file = new config version on
+# redeploy (Swarm configs are immutable; Portainer recreates on change).
+configs:
+  litellm-config:
+    file: ./deploy/litellm-config.yaml
 
 networks:
   yt-prod:
