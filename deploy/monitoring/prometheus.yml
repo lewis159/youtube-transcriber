@@ -1,0 +1,64 @@
+# Prometheus scrape config for the YT Transcriber monitoring stack.
+# Mounted into the prometheus service as /etc/prometheus/prometheus.yml.
+#
+# Service discovery note (Swarm): services on the same overlay are reachable by
+# their service name. `tasks.<service>` resolves to the A records of every task
+# (one IP per replica/node), which is what we want for `mode: global` exporters
+# so Prometheus scrapes EVERY node's exporter, not a single VIP.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: yt-transcriber
+    env: prod
+
+# Alert rules evaluated by Prometheus.
+rule_files:
+  - /etc/prometheus/alert-rules.yml
+
+# Send firing alerts to Alertmanager (same overlay, service name).
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+  # Prometheus scrapes itself.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # node-exporter — one task per node (mode: global). tasks.* => all node IPs.
+  - job_name: node-exporter
+    dns_sd_configs:
+      - names: ["tasks.node-exporter"]
+        type: A
+        port: 9100
+
+  # cadvisor — per-container metrics, one task per node.
+  - job_name: cadvisor
+    dns_sd_configs:
+      - names: ["tasks.cadvisor"]
+        type: A
+        port: 8080
+
+  # ── App targets (CROSS-STACK on the yt-prod overlay) ──────────────────────
+  # Uncomment when the Next.js app / whisper worker expose a Prometheus
+  # `/metrics` endpoint. Prometheus is attached to the external yt-prod overlay
+  # in docker-compose.monitoring.yml so these names resolve.
+  #
+  # - job_name: yt-app
+  #   metrics_path: /metrics
+  #   dns_sd_configs:
+  #     - names: ["tasks.app"]      # all app replicas on yt-prod
+  #       type: A
+  #       port: 3000
+  #
+  # - job_name: yt-whisper-worker
+  #   metrics_path: /metrics
+  #   dns_sd_configs:
+  #     - names: ["tasks.whisper-worker"]
+  #       type: A
+  #       port: 9000

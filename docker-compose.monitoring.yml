@@ -1,0 +1,314 @@
+version: '3.9'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# YT Transcriber — Observability stack (Prometheus / Grafana / Loki / Alerting)
+# ─────────────────────────────────────────────────────────────────────────────
+# STANDALONE Swarm stack. Deploy SEPARATELY from docker-compose.prod.yml so it
+# never conflicts with the app stack or other in-flight PRs:
+#
+#   docker stack deploy -c docker-compose.monitoring.yml monitoring
+#
+# Design goals (see MONITORING_NOTES.md):
+#   • Multi-host ready NOW on a single node.
+#       - Exporters (node-exporter, cadvisor, promtail) run `mode: global`
+#         => exactly one task per node, automatically, as nodes are added.
+#       - Central services (prometheus/grafana/loki/alertmanager/uptime-kuma)
+#         use a SOFT spread preference today and carry a COMMENTED hard
+#         constraint `node.labels.role == mgmt` for when the mgmt node exists.
+#   • Feeds the future Sentinel console — Prometheus + Loki are the data sources.
+#
+# Labels follow the project convention used in docker-compose.prod.yml:
+#   project=YT_Transcription / project.component=<svc> / project.env=prod
+#
+# Required env (set in the stack's .env or Portainer stack env):
+#   GRAFANA_ADMIN_PASSWORD   admin password for Grafana
+#   ALERT_WEBHOOK_URL        Slack/generic webhook for Alertmanager (optional)
+#   SMTP_*                   SMTP placeholders for email alerts (optional)
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Prometheus: metrics store + scrape engine + alert evaluator ─────────────
+  prometheus:
+    image: prom/prometheus:v2.53.1
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    configs:
+      - source: prometheus_config
+        target: /etc/prometheus/prometheus.yml
+      - source: prometheus_rules
+        target: /etc/prometheus/alert-rules.yml
+    volumes:
+      - prometheus-data:/prometheus
+    deploy:
+      replicas: 1
+      placement:
+        # SOFT now (single node). When the mgmt node exists, uncomment the
+        # constraint to pin the central stack there and drop the preference.
+        preferences:
+          - spread: node.id
+        # constraints:
+        #   - node.labels.role == mgmt
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=prometheus"
+        - "project.env=prod"
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - monitoring
+      # Attach to the app overlay so Prometheus can scrape app `/metrics` and
+      # service discovery names (e.g. tasks.<service>) once the app exposes them.
+      - yt-prod
+
+  # ── node-exporter: host-level metrics (one per node) ────────────────────────
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    command:
+      - "--path.rootfs=/host"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    volumes:
+      - /:/host:ro,rslave
+    deploy:
+      mode: global
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=node-exporter"
+        - "project.env=prod"
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - monitoring
+
+  # ── cadvisor: per-container resource metrics (one per node) ─────────────────
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    command:
+      - "--docker_only=true"
+      - "--housekeeping_interval=15s"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    deploy:
+      mode: global
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=cadvisor"
+        - "project.env=prod"
+      resources:
+        limits:
+          memory: 256M
+    networks:
+      - monitoring
+
+  # ── Loki: log store ─────────────────────────────────────────────────────────
+  loki:
+    image: grafana/loki:3.1.1
+    command: "-config.file=/etc/loki/local-config.yaml"
+    volumes:
+      - loki-data:/loki
+    deploy:
+      replicas: 1
+      placement:
+        preferences:
+          - spread: node.id
+        # constraints:
+        #   - node.labels.role == mgmt
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=loki"
+        - "project.env=prod"
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - monitoring
+
+  # ── promtail: ships Docker container logs to Loki (one per node) ────────────
+  promtail:
+    image: grafana/promtail:3.1.1
+    command: "-config.file=/etc/promtail/config.yml"
+    configs:
+      - source: promtail_config
+        target: /etc/promtail/config.yml
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    deploy:
+      mode: global
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=promtail"
+        - "project.env=prod"
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - monitoring
+
+  # ── Grafana: dashboards (provisioned datasources + overview dashboard) ──────
+  grafana:
+    image: grafana/grafana:11.1.4
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      # Grafana served behind NPM at a subpath/subdomain — set this to the
+      # public URL when exposing (e.g. https://grafana.bentech.dev).
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3000}
+    configs:
+      - source: grafana_ds_prometheus
+        target: /etc/grafana/provisioning/datasources/prometheus.yml
+      - source: grafana_ds_loki
+        target: /etc/grafana/provisioning/datasources/loki.yml
+      - source: grafana_dashboard_provider
+        target: /etc/grafana/provisioning/dashboards/provider.yml
+      - source: grafana_dashboard_overview
+        target: /var/lib/grafana/dashboards/overview.json
+    volumes:
+      - grafana-data:/var/lib/grafana
+    deploy:
+      replicas: 1
+      placement:
+        preferences:
+          - spread: node.id
+        # constraints:
+        #   - node.labels.role == mgmt
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=grafana"
+        - "project.env=prod"
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          memory: 256M
+    # Grafana listens on 3000 internally. DO NOT publish broadly — expose via
+    # Nginx Proxy Manager on the `proxy` overlay (proxy host -> grafana:3000).
+    # See MONITORING_NOTES.md "Reaching Grafana via NPM".
+    networks:
+      - monitoring
+      - proxy
+
+  # ── Alertmanager: routes Prometheus alerts to receivers ─────────────────────
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    configs:
+      - source: alertmanager_config
+        target: /etc/alertmanager/alertmanager.yml
+    environment:
+      # Substituted into alertmanager.yml at runtime is NOT supported natively;
+      # these are surfaced for documentation / future templating. Edit the
+      # config file directly or wire a secret. See deploy/monitoring/alertmanager.yml.
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+      - SMTP_SMARTHOST=${SMTP_SMARTHOST:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+    deploy:
+      replicas: 1
+      placement:
+        preferences:
+          - spread: node.id
+        # constraints:
+        #   - node.labels.role == mgmt
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=alertmanager"
+        - "project.env=prod"
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - monitoring
+
+  # ── uptime-kuma: external/black-box endpoint probing (yt.bentech.dev, etc.) ─
+  uptime-kuma:
+    image: louislam/uptime-kuma:1.23.16
+    volumes:
+      - uptime-kuma-data:/app/data
+    deploy:
+      replicas: 1
+      placement:
+        preferences:
+          - spread: node.id
+        # constraints:
+        #   - node.labels.role == mgmt
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=uptime-kuma"
+        - "project.env=prod"
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          memory: 256M
+    # Listens on 3001 internally. Expose the UI via NPM on the proxy network.
+    networks:
+      - monitoring
+      - proxy
+
+# ── Configs (rendered from deploy/monitoring/*) ───────────────────────────────
+# Swarm configs are immutable: bump the name suffix (e.g. _v2) when the file
+# content changes, then redeploy, so the new version is rolled out.
+configs:
+  prometheus_config:
+    file: ./deploy/monitoring/prometheus.yml
+  prometheus_rules:
+    file: ./deploy/monitoring/alert-rules.yml
+  promtail_config:
+    file: ./deploy/monitoring/promtail-config.yml
+  alertmanager_config:
+    file: ./deploy/monitoring/alertmanager.yml
+  grafana_ds_prometheus:
+    file: ./deploy/monitoring/grafana/provisioning/datasources/prometheus.yml
+  grafana_ds_loki:
+    file: ./deploy/monitoring/grafana/provisioning/datasources/loki.yml
+  grafana_dashboard_provider:
+    file: ./deploy/monitoring/grafana/provisioning/dashboards/dashboards.yml
+  grafana_dashboard_overview:
+    file: ./deploy/monitoring/grafana/dashboards/overview.json
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  uptime-kuma-data:
+
+networks:
+  # Private overlay for the monitoring stack's internal traffic.
+  monitoring:
+    driver: overlay
+
+  # The app's production overlay. Declared EXTERNAL here so this standalone
+  # stack can attach to it and scrape app targets WITHOUT redefining it.
+  # NOTE on naming: when the app stack is deployed as `docker stack deploy ...
+  # <stackname>`, Swarm prefixes the network as `<stackname>_yt-prod`. Set the
+  # name below to match the actual deployed network (default assumes the prod
+  # stack is named `yt` => `yt_yt-prod`). Verify with `docker network ls`.
+  yt-prod:
+    external: true
+    name: ${YT_PROD_NETWORK:-yt_yt-prod}
+
+  # Nginx Proxy Manager overlay (already external in the app stack) for UI exposure.
+  proxy:
+    external: true
