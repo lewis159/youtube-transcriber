@@ -56,7 +56,6 @@ function formatTimestamp(iso: string): string {
 function RoadmapItemCard({ item, comments }: { item: RoadmapItem; comments: RoadmapComment[] }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [hover, setHover] = useState(false)
   const [body, setBody] = useState('')
   const [posting, setPosting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -124,17 +123,17 @@ function RoadmapItemCard({ item, comments }: { item: RoadmapItem; comments: Road
             setOpen(o => !o)
           }
         }}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
+        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.025)' }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
         role="button"
         tabIndex={0}
         aria-expanded={open}
+        aria-label={`${item.title} — ${count} update${count === 1 ? '' : 's'}; toggle details`}
         style={{
           display: 'flex', alignItems: 'flex-start', gap: '14px',
           padding: '12px 16px',
           cursor: 'pointer',
-          userSelect: 'none',
-          background: hover ? 'rgba(255,255,255,0.025)' : 'transparent',
+          background: 'transparent',
           transition: 'background 0.12s',
         }}
       >
