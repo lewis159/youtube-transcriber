@@ -17,10 +17,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the worker source.
 COPY worker.py .
 
+# Secrets→env bridge: loads Docker Swarm secrets from /run/secrets/* into env
+# before the worker starts (backward compatible — missing files are skipped).
+COPY load-secrets-entrypoint.sh /usr/local/bin/load-secrets-entrypoint.sh
+RUN chmod 0555 /usr/local/bin/load-secrets-entrypoint.sh
+
 # Cache dirs (mounted as a volume in docker-compose.whisper.yml).
 ENV HF_HOME=/cache/huggingface \
     WHISPER_TEMP_DIR=/cache/tmp \
     PYTHONUNBUFFERED=1
 RUN mkdir -p /cache/huggingface /cache/tmp
 
+# Entrypoint loads secrets→env, then execs the CMD below unchanged.
+ENTRYPOINT ["/usr/local/bin/load-secrets-entrypoint.sh"]
 CMD ["python", "worker.py"]
