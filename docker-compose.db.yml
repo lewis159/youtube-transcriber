@@ -1,0 +1,327 @@
+# =============================================================================
+# YT Transcriber — LOCAL HIGH-AVAILABILITY DATABASE stack (Docker Swarm)
+# =============================================================================
+# Goal: self-host Postgres + PostgREST so the app moves OFF cloud Supabase with
+# ZERO app code change. The app uses Supabase ONLY as Postgres-via-PostgREST
+# (auth is Clerk; no Supabase Auth/Storage/Realtime). So we run:
+#
+#     Postgres (Patroni HA) -> HAProxy (leader routing) -> PgBouncer -> PostgREST
+#
+# and the app just repoints 3 env vars (see DB_MIGRATION_RUNBOOK.md):
+#     NEXT_PUBLIC_SUPABASE_URL        -> http(s)://<postgrest-host>:3001
+#     NEXT_PUBLIC_SUPABASE_ANON_KEY   -> minted anon JWT       (db/mint-jwt.md)
+#     SUPABASE_SERVICE_ROLE_KEY       -> minted service JWT    (db/mint-jwt.md)
+#
+# This is a CONFIG ARTIFACT / launch reference — heavily commented. It reuses the
+# PROVEN Sentinel Patroni+etcd+HAProxy design (Spilo 16 image, etcd DCS, HAProxy
+# httpchk GET /primary leader routing) from sentinel-stack.prod.yml.
+#
+# Deploy:  docker stack deploy -c docker-compose.db.yml ytdb
+#   (or Portainer -> Stacks -> Add Stack, Swarm mode)
+#
+# -----------------------------------------------------------------------------
+# NODE-ROLE / ANTI-AFFINITY PLAN  (mirrors Sentinel's pgnode hardening)
+# -----------------------------------------------------------------------------
+# Launch on 1 node now; designed to spread to 2 (then 3) without re-architecting.
+#
+#   host-1  pgnode=a   — Patroni member A (+ everything, single-node launch)
+#   host-2  pgnode=b   — Patroni member B (added at 2-host stage)
+#   host-3            — 3rd etcd member (true quorum DCS) — added later
+#
+# SOFT spread NOW vs HARD anti-affinity LATER:
+#   * patroni-a / patroni-b below use placement.preferences (SOFT spread by
+#     node.labels.pgnode). On a single node BOTH schedule there (launch works);
+#     once a 2nd labelled node exists they fan out automatically.
+#   * For GUARANTEED anti-affinity (the Sentinel-prod hardening), replace each
+#     member's `preferences` with a hard `constraints` line — see the inline
+#     "HARDEN" comment in each patroni service. Set the labels first:
+#         docker node update --label-add pgnode=a <host-1-id>
+#         docker node update --label-add pgnode=b <host-2-id>
+#
+# Why two distinct services (patroni-a / patroni-b) and NOT replicas:2?
+#   Each member keeps a NODE-LOCAL named volume for pgdata. Two services let
+#   each pin to its own node and keep its own volume across restarts. NEVER use
+#   a shared/clustered volume driver for pgdata — that corrupts Postgres.
+#
+# -----------------------------------------------------------------------------
+# REPLICATION MODE
+# -----------------------------------------------------------------------------
+# Default = ASYNCHRONOUS streaming replication (Patroni default). Lowest write
+# latency; on a hard leader loss you can lose the last few in-flight commits.
+# To switch to SYNCHRONOUS (zero data loss on failover, higher write latency),
+# set on patroni-a/-b env:  PATRONI_synchronous_mode=true  (see inline note).
+#
+# -----------------------------------------------------------------------------
+# REQUIRED STACK ENV  (set in Portainer stack env, or a .env beside this file)
+# -----------------------------------------------------------------------------
+#   PG_DB                      e.g. postgres   (PostgREST connects to this DB)
+#   PG_SUPERUSER_PASSWORD      Spilo superuser (postgres)
+#   PG_ADMIN_PASSWORD          Spilo admin role
+#   PG_STANDBY_PASSWORD        Spilo replication/standby role
+#   PG_AUTHENTICATOR_PASSWORD  password for the PostgREST `authenticator` role
+#                              (created by db/bootstrap/00_roles.sql)
+#   PGRST_JWT_SECRET           HS256 secret used to sign + verify anon/service
+#                              JWTs (becomes the app's anon/service keys; see
+#                              db/mint-jwt.md). MIN 32 chars.
+# (pgBackRest S3 creds are set on the backup sidecar — see db/pgbackrest/.)
+#
+# NOTE on secrets: this LOCAL stack passes passwords via ${...} stack env to stay
+# operator-friendly (matches docker-compose.prod.yml convention). For a true prod
+# deploy, promote PG_* to Docker SECRETS and use Spilo's *_FILE env vars exactly
+# as sentinel-stack.prod.yml does (PGPASSWORD_SUPERUSER_FILE=/run/secrets/...).
+# =============================================================================
+
+version: "3.8"
+
+# -----------------------------------------------------------------------------
+# Shared Spilo env (mirrors x-spilo-env in Sentinel's stacks).
+# SCOPE namespaces the Patroni cluster in etcd; both members share one SCOPE.
+# -----------------------------------------------------------------------------
+x-spilo-env: &spilo-env
+  SCOPE: ytdb
+  PGVERSION: "16"
+  ETCD3_HOSTS: "etcd:2379"
+  PGPASSWORD_SUPERUSER: ${PG_SUPERUSER_PASSWORD}
+  PGPASSWORD_ADMIN: ${PG_ADMIN_PASSWORD}
+  PGPASSWORD_STANDBY: ${PG_STANDBY_PASSWORD}
+  # --- SYNCHRONOUS replication (zero-data-loss failover) — opt in by setting:
+  # PATRONI_synchronous_mode: "true"
+  # PATRONI_synchronous_mode_strict: "false"   # don't block writes if no standby
+
+services:
+
+  # ===========================================================================
+  # etcd — Patroni's Distributed Configuration Store (leader election).
+  # 1 member now (quorum-of-one; fine for 1-2 host launch). See header for the
+  # planned migration to a 3-member quorum at host #3.
+  # ===========================================================================
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.17
+    command:
+      - etcd
+      - --name=etcd0
+      - --data-dir=/etcd-data
+      - --advertise-client-urls=http://etcd:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --initial-advertise-peer-urls=http://etcd:2380
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-cluster=etcd0=http://etcd:2380
+    volumes:
+      - etcd-data:/etcd-data
+    networks: [ytdb]
+    deploy:
+      replicas: 1
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=etcd"
+        - "project.env=prod"
+      restart_policy: { condition: any }
+      resources:
+        limits: { memory: 256M }
+      # 3-HOST STAGE — replace `replicas: 1` with a true 3-member quorum:
+      #   replicas: 3
+      #   placement:
+      #     max_replicas_per_node: 1
+      # AND switch --initial-cluster to static etcd0/1/2 peers (or a discovery
+      # token). Going 1 -> 3 members is a planned reconfigure, NOT a live scale.
+
+  # ===========================================================================
+  # patroni-a / patroni-b — Spilo (Patroni + PostgreSQL 16).
+  # Two distinct services so each pins to a different node and keeps its
+  # node-local pgdata volume. Patroni runs leader election via etcd.
+  # ===========================================================================
+  patroni-a:
+    image: ghcr.io/zalando/spilo-16:3.3-p1
+    hostname: patroni-a
+    environment:
+      <<: *spilo-env
+    volumes:
+      - patroni-a-data:/home/postgres/pgdata   # node-local; never migrate nodes
+    depends_on: [etcd]
+    networks: [ytdb]
+    deploy:
+      replicas: 1
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=patroni-a"
+        - "project.env=prod"
+      placement:
+        preferences:
+          - spread: node.labels.pgnode   # SOFT: 1 node now, spreads at 2 hosts
+        # HARDEN (guaranteed anti-affinity, like Sentinel prod) — replace the
+        # `preferences` block above with:
+        #   constraints: [node.labels.pgnode == a]
+      restart_policy: { condition: any }
+      update_config: { order: stop-first }      # let Patroni stop cleanly
+      resources:
+        limits: { memory: 1G }
+
+  patroni-b:
+    image: ghcr.io/zalando/spilo-16:3.3-p1
+    hostname: patroni-b
+    environment:
+      <<: *spilo-env
+    volumes:
+      - patroni-b-data:/home/postgres/pgdata
+    depends_on: [etcd]
+    networks: [ytdb]
+    deploy:
+      replicas: 1
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=patroni-b"
+        - "project.env=prod"
+      placement:
+        preferences:
+          - spread: node.labels.pgnode   # SOFT spread
+        # HARDEN — replace with:  constraints: [node.labels.pgnode == b]
+      restart_policy: { condition: any }
+      update_config: { order: stop-first }
+      resources:
+        limits: { memory: 1G }
+
+  # ===========================================================================
+  # haproxy — DB front door. Writes (:5432) -> current Patroni LEADER, reads
+  # (:5433) -> replicas. Reuses Sentinel's haproxy.cfg pattern: httpchk
+  # `GET /primary` on the Patroni REST API (:8008); only the leader answers 200.
+  # x2 + soft spread so the front door itself is not a SPOF.
+  # Config ships as a Swarm config (immutable) — created out-of-band:
+  #   docker config create ytdb_haproxy_v1 deploy/haproxy-db.cfg
+  # To change it: create ytdb_haproxy_v2 and `docker service update`.
+  # ===========================================================================
+  haproxy:
+    image: haproxy:2.9-alpine
+    configs:
+      - source: ytdb_haproxy_v1
+        target: /usr/local/etc/haproxy/haproxy.cfg
+        mode: 0444
+    networks: [ytdb]
+    # No published ports needed: pgbouncer/postgrest reach it in-overlay.
+    # (Add `ports: ["5432:5432","5433:5433"]` only if you want host access for
+    #  pg_dump/restore during the cutover — the runbook uses that.)
+    depends_on: [patroni-a, patroni-b]
+    deploy:
+      replicas: 2
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=haproxy"
+        - "project.env=prod"
+      placement:
+        preferences:
+          - spread: node.labels.pgnode
+      restart_policy: { condition: any }
+      update_config: { order: start-first, parallelism: 1 }
+      resources:
+        limits: { memory: 128M }
+
+  # ===========================================================================
+  # pgbouncer — transaction pooling in front of the leader (haproxy:5432).
+  # PostgREST opens many short-lived connections; transaction pooling keeps the
+  # Postgres backend count sane. Listens on :6432.
+  # ===========================================================================
+  pgbouncer:
+    image: edoburu/pgbouncer:1.23.1-p2
+    environment:
+      - DB_HOST=haproxy
+      - DB_PORT=5432                 # haproxy writes port -> leader
+      - DB_NAME=${PG_DB}
+      # PgBouncer authenticates the authenticator role; PostgREST then SET ROLEs.
+      - DB_USER=authenticator
+      - DB_PASSWORD=${PG_AUTHENTICATOR_PASSWORD}
+      - POOL_MODE=transaction
+      - MAX_CLIENT_CONN=1000
+      - DEFAULT_POOL_SIZE=25
+      - AUTH_TYPE=scram-sha-256
+      - LISTEN_PORT=6432
+      # transaction pooling disables session features; PostgREST is compatible.
+      - SERVER_RESET_QUERY=DISCARD ALL
+      - IGNORE_STARTUP_PARAMETERS=extra_float_digits,search_path
+    depends_on: [haproxy]
+    networks: [ytdb]
+    deploy:
+      replicas: 2
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=pgbouncer"
+        - "project.env=prod"
+      placement:
+        preferences:
+          - spread: node.labels.pgnode
+      restart_policy: { condition: any }
+      update_config: { order: start-first, parallelism: 1 }
+      resources:
+        limits: { memory: 128M }
+
+  # ===========================================================================
+  # postgrest — the Supabase-compatible REST layer the app's supabase-js talks
+  # to. x2 + soft spread. Reaches Postgres through pgbouncer (transaction pool).
+  #
+  #   PGRST_DB_SCHEMAS=public,ops    -> matches the app (migration 009 `ops`).
+  #   PGRST_DB_ANON_ROLE=anon        -> role used for unauthenticated requests.
+  #   PGRST_JWT_SECRET / ROLE_CLAIM  -> verify minted JWTs; `.role` claim picks
+  #                                     the Postgres role (anon|service_role).
+  #
+  # The app connects with the SERVICE_ROLE key for ~all reads/writes (see
+  # app-ha/lib/*.ts -> supabaseAdmin), so service_role (BYPASSRLS) carries the
+  # load; RLS on public.* is a backstop. Published on :3001 (host) so the app's
+  # NEXT_PUBLIC_SUPABASE_URL can point at it.
+  # ===========================================================================
+  postgrest:
+    image: postgrest/postgrest:v12.2.3
+    environment:
+      - PGRST_DB_URI=postgres://authenticator:${PG_AUTHENTICATOR_PASSWORD}@pgbouncer:6432/${PG_DB}
+      - PGRST_DB_SCHEMAS=public,ops
+      - PGRST_DB_ANON_ROLE=anon
+      - PGRST_JWT_SECRET=${PGRST_JWT_SECRET}
+      - PGRST_JWT_ROLE_CLAIM_KEY=.role
+      # PgBouncer transaction mode: PostgREST must NOT use prepared statements.
+      - PGRST_DB_PREPARED_STATEMENTS=false
+      - PGRST_DB_POOL=10
+      - PGRST_SERVER_PORT=3000
+      # PGRST_DB_ROOT_SPEC / PGRST_OPENAPI_MODE left default.
+    ports:
+      - "3001:3000"   # host:container — app -> NEXT_PUBLIC_SUPABASE_URL=:3001
+    depends_on: [pgbouncer]
+    networks: [ytdb]
+    deploy:
+      replicas: 2
+      labels:
+        - "project=YT_Transcription"
+        - "project.component=postgrest"
+        - "project.env=prod"
+      placement:
+        preferences:
+          - spread: node.labels.pgnode
+      restart_policy: { condition: on-failure }
+      update_config: { order: start-first, parallelism: 1 }
+      resources:
+        limits: { memory: 256M }
+
+# =============================================================================
+# Named volumes — node-local. Patroni volumes live wherever pgnode pins them.
+# Do NOT use a shared/clustered driver for pgdata.
+# =============================================================================
+volumes:
+  etcd-data:
+  patroni-a-data:
+  patroni-b-data:
+
+# =============================================================================
+# Configs — created out-of-band (immutable). See haproxy service header.
+#   docker config create ytdb_haproxy_v1 deploy/haproxy-db.cfg
+# =============================================================================
+configs:
+  ytdb_haproxy_v1:
+    external: true
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  # Internal overlay for the whole DB tier; encrypted node-to-node.
+  ytdb:
+    driver: overlay
+    attachable: true        # attachable so the runbook can run one-off
+                            # pg_dump/psql/pgbackrest containers on this net.
+    driver_opts:
+      encrypted: "true"
