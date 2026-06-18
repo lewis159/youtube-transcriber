@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import type { RoadmapItem as RoadmapItemBase } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
+import type { RoadmapItem as RoadmapItemBase, RoadmapComment } from '@/lib/supabase'
 
 type Status = 'completed' | 'in_progress' | 'pending' | 'future'
 type Priority = 'critical' | 'high' | 'medium' | 'low' | 'nice_to_have' | 'op_security'
@@ -38,7 +39,170 @@ const CATEGORIES: { key: Category; label: string; description: string }[] = [
   { key: 'sentinel',  label: 'Op Security',      description: 'Operations & Security Console (Sentinel) — full build list' },
 ]
 
-function RoadmapItemCard({ item }: { item: RoadmapItem }) {
+function formatTimestamp(iso: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return iso
+  return d.toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
+// Admin-only update thread for a single roadmap item. Renders existing
+// comments (oldest at top, newest at bottom) plus an "Add update" composer.
+function UpdatesThread({ itemKey, comments }: { itemKey: number; comments: RoadmapComment[] }) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [body, setBody] = useState('')
+  const [posting, setPosting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const count = comments.length
+
+  const post = async () => {
+    const trimmed = body.trim()
+    if (!trimmed || posting) return
+    setPosting(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/roadmap/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemKey, body: trimmed }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || `Failed (${res.status})`)
+      }
+      setBody('')
+      router.refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to post update')
+    } finally {
+      setPosting(false)
+    }
+  }
+
+  const remove = async (id: string) => {
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/roadmap/comments?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || `Failed (${res.status})`)
+      }
+      router.refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete update')
+    }
+  }
+
+  return (
+    <div style={{ marginTop: '8px', borderTop: '0.5px solid #1e1e1e', paddingTop: '8px' }}>
+      {/* Toggle */}
+      <div
+        onClick={() => setOpen(o => !o)}
+        role="button"
+        tabIndex={0}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: '6px',
+          cursor: 'pointer', fontSize: '11px', color: 'var(--text-secondary)',
+          userSelect: 'none',
+        }}
+      >
+        <span style={{ fontFamily: 'monospace', color: '#555' }}>{open ? '▾' : '▸'}</span>
+        <span>Updates</span>
+        {count > 0 && (
+          <span style={{
+            fontSize: '10px', fontWeight: 700, padding: '0px 6px', borderRadius: '8px',
+            color: '#60a5fa', background: 'rgba(96,165,250,0.08)', border: '0.5px solid rgba(96,165,250,0.2)',
+          }}>
+            {count}
+          </span>
+        )}
+      </div>
+
+      {open && (
+        <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {/* Thread */}
+          {count === 0 ? (
+            <span style={{ fontSize: '11px', color: '#444' }}>No updates yet.</span>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {comments.map(c => (
+                <div
+                  key={c.id}
+                  style={{
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '0.5px solid #1e1e1e',
+                    borderRadius: '5px',
+                    padding: '8px 10px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>{c.authorName}</span>
+                    <span style={{ fontSize: '10px', color: '#444', fontFamily: 'monospace' }}>{formatTimestamp(c.createdAt)}</span>
+                    <span
+                      onClick={() => remove(c.id)}
+                      role="button"
+                      tabIndex={0}
+                      title="Delete update"
+                      style={{ marginLeft: 'auto', fontSize: '11px', color: '#444', cursor: 'pointer' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = '#ef4444' }}
+                      onMouseLeave={e => { e.currentTarget.style.color = '#444' }}
+                    >
+                      ✕
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#aaa', margin: 0, lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{c.body}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Composer */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <textarea
+              value={body}
+              onChange={e => setBody(e.target.value)}
+              placeholder="Add an update…"
+              rows={2}
+              style={{
+                width: '100%', boxSizing: 'border-box', resize: 'vertical',
+                background: 'var(--bg-base)', color: 'var(--text-primary)',
+                border: '0.5px solid var(--nav-border)', borderRadius: '5px',
+                padding: '8px 10px', fontSize: '12px', lineHeight: '1.5',
+                fontFamily: 'inherit',
+              }}
+            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button
+                onClick={post}
+                disabled={posting || !body.trim()}
+                style={{
+                  fontSize: '11px', fontWeight: 600,
+                  color: posting || !body.trim() ? '#555' : '#60a5fa',
+                  background: 'rgba(96,165,250,0.08)',
+                  border: '0.5px solid rgba(96,165,250,0.2)',
+                  borderRadius: '5px', padding: '5px 12px',
+                  cursor: posting || !body.trim() ? 'default' : 'pointer',
+                }}
+              >
+                {posting ? 'Posting…' : 'Post update'}
+              </button>
+              {error && <span style={{ fontSize: '11px', color: '#ef4444' }}>{error}</span>}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RoadmapItemCard({ item, comments }: { item: RoadmapItem; comments: RoadmapComment[] }) {
   const ps = PRIORITY_STYLE[item.priority]
   const ss = STATUS_STYLE[item.status]
   const isComplete = item.status === 'completed'
@@ -49,56 +213,64 @@ function RoadmapItemCard({ item }: { item: RoadmapItem }) {
       borderLeft: `3px solid ${ps.leftBorder}`,
       borderRadius: '6px',
       padding: '12px 16px',
-      display: 'flex',
-      alignItems: 'flex-start',
-      gap: '14px',
       opacity: isComplete ? 0.6 : 1,
     }}>
-      {/* ID */}
-      <span style={{ fontSize: '11px', color: '#444', fontFamily: 'monospace', flexShrink: 0, marginTop: '2px', width: '28px' }}>
-        #{item.id}
-      </span>
-
-      {/* Content */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
-          <span style={{
-            fontSize: '13px', fontWeight: 600,
-            color: isComplete ? '#555' : 'var(--text-primary)',
-            textDecoration: isComplete ? 'line-through' : 'none',
-          }}>
-            {item.title}
-          </span>
-          {/* Priority badge */}
-          <span style={{
-            fontSize: '10px', fontWeight: 700, padding: '1px 7px', borderRadius: '3px',
-            color: ps.color, background: ps.bg, border: `0.5px solid ${ps.border}`,
-            flexShrink: 0,
-          }}>
-            {ps.label}
-          </span>
-        </div>
-        <p style={{ fontSize: '12px', color: '#555', margin: 0, lineHeight: '1.55' }}>
-          {item.description}
-        </p>
-      </div>
-
-      {/* Right side: status + date */}
-      <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
-        <span style={{
-          fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '3px',
-          color: ss.color, background: ss.bg, border: `0.5px solid ${ss.border}`,
-          whiteSpace: 'nowrap',
-        }}>
-          {ss.label}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+        {/* ID */}
+        <span style={{ fontSize: '11px', color: '#444', fontFamily: 'monospace', flexShrink: 0, marginTop: '2px', width: '28px' }}>
+          #{item.id}
         </span>
-        <span style={{ fontSize: '10px', color: '#444', fontFamily: 'monospace' }}>{item.updatedAt}</span>
+
+        {/* Content */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+            <span style={{
+              fontSize: '13px', fontWeight: 600,
+              color: isComplete ? '#555' : 'var(--text-primary)',
+              textDecoration: isComplete ? 'line-through' : 'none',
+            }}>
+              {item.title}
+            </span>
+            {/* Priority badge */}
+            <span style={{
+              fontSize: '10px', fontWeight: 700, padding: '1px 7px', borderRadius: '3px',
+              color: ps.color, background: ps.bg, border: `0.5px solid ${ps.border}`,
+              flexShrink: 0,
+            }}>
+              {ps.label}
+            </span>
+          </div>
+          <p style={{ fontSize: '12px', color: '#555', margin: 0, lineHeight: '1.55' }}>
+            {item.description}
+          </p>
+        </div>
+
+        {/* Right side: status + date */}
+        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+          <span style={{
+            fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '3px',
+            color: ss.color, background: ss.bg, border: `0.5px solid ${ss.border}`,
+            whiteSpace: 'nowrap',
+          }}>
+            {ss.label}
+          </span>
+          <span style={{ fontSize: '10px', color: '#444', fontFamily: 'monospace' }}>{item.updatedAt}</span>
+        </div>
       </div>
+
+      {/* Admin-only update thread */}
+      <UpdatesThread itemKey={item.id} comments={comments} />
     </div>
   )
 }
 
-export default function RoadmapClient({ roadmap }: { roadmap: RoadmapItem[] }) {
+export default function RoadmapClient({
+  roadmap,
+  commentsByItem = {},
+}: {
+  roadmap: RoadmapItem[]
+  commentsByItem?: Record<number, RoadmapComment[]>
+}) {
   const completed   = roadmap.filter(i => i.status === 'completed').length
   const total       = roadmap.length
 
@@ -292,7 +464,7 @@ export default function RoadmapClient({ roadmap }: { roadmap: RoadmapItem[] }) {
 
               {/* Items */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {items.map(item => <RoadmapItemCard key={item.id} item={item} />)}
+                {items.map(item => <RoadmapItemCard key={item.id} item={item} comments={commentsByItem[item.id] ?? []} />)}
               </div>
             </div>
           )
@@ -313,7 +485,7 @@ export default function RoadmapClient({ roadmap }: { roadmap: RoadmapItem[] }) {
                 <span style={{ fontSize: '11px', color: '#444', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{completedItems.length} items</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {completedItems.map(item => <RoadmapItemCard key={item.id} item={item} />)}
+                {completedItems.map(item => <RoadmapItemCard key={item.id} item={item} comments={commentsByItem[item.id] ?? []} />)}
               </div>
             </div>
           )

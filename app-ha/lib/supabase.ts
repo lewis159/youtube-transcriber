@@ -184,6 +184,48 @@ export const getRoadmapItems = unstable_cache(
   { revalidate: 30, tags: ['roadmap'] }
 )
 
+// ── Roadmap item update threads (admin-only comments) ────────────────────────
+// Modelled on the Sentinel ops.comments pattern. Comments join item_key (the
+// human-facing #) → users for an attributed author name. Service-role read.
+
+export interface RoadmapComment {
+  id: string
+  itemKey: number
+  body: string
+  kind: string
+  authorName: string
+  createdAt: string
+}
+
+// Returns ALL roadmap comments (across every item), ordered created_at ASC
+// (oldest first) so the server page can group them by itemKey and render each
+// thread newest-at-bottom. Cached with a short revalidate + 'roadmap-comments'
+// tag; the POST/DELETE API route revalidates that tag on every mutation.
+export const getRoadmapComments = unstable_cache(
+  async (): Promise<RoadmapComment[]> => {
+    const { data, error } = await supabaseAdmin
+      .from('roadmap_comments')
+      .select('id, item_key, body, kind, created_at, author:author_user_id(full_name, email)')
+      .order('created_at', { ascending: true })
+
+    if (error) throw error
+
+    return (data ?? []).map((row: any) => {
+      const author = Array.isArray(row.author) ? row.author[0] : row.author
+      return {
+        id: row.id,
+        itemKey: row.item_key,
+        body: row.body,
+        kind: row.kind,
+        authorName: author?.full_name || author?.email || 'system',
+        createdAt: row.created_at ?? '',
+      }
+    })
+  },
+  ['roadmap-comments'],
+  { revalidate: 10, tags: ['roadmap-comments'] }
+)
+
 export async function testDatabaseConnection(): Promise<boolean> {
   // Skip test during build if credentials not set
   if (supabaseUrl.includes('placeholder') || supabaseAnonKey.includes('placeholder')) {
