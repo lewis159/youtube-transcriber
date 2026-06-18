@@ -1,0 +1,8 @@
+# Shell scripts run on Linux (Docker images / the prod box). Force LF so a
+# Windows checkout can never write CRLF that would break the interpreter
+# (e.g. `bad interpreter: /usr/bin/env bash^M`).
+*.sh text eol=lf
+
+# SQL + ops config also execute/parse on Linux — keep them LF too.
+*.sql text eol=lf
+*.conf text eol=lf
