@@ -49,6 +49,12 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Secrets→env bridge. Loads any Docker Swarm secrets mounted at /run/secrets/*
+# into the matching env vars before the app starts (backward compatible: a missing
+# secret file is simply skipped). World-readable+executable so the non-root
+# `nextjs` user can run it. See deploy/load-secrets-entrypoint.sh.
+COPY --chmod=0555 deploy/load-secrets-entrypoint.sh /usr/local/bin/load-secrets-entrypoint.sh
+
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000
@@ -58,4 +64,6 @@ ENV HOSTNAME="0.0.0.0"
 HEALTHCHECK --interval=10s --timeout=10s --retries=3 --start-period=15s \
   CMD node -e "require('http').get('http://localhost:3000/api/ping', (r) => { if (r.statusCode !== 200) throw new Error(r.statusCode); })" || exit 1
 
+# Entrypoint loads secrets→env, then execs the CMD below unchanged.
+ENTRYPOINT ["/usr/local/bin/load-secrets-entrypoint.sh"]
 CMD ["node", "server.js"]

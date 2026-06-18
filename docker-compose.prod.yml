@@ -8,29 +8,48 @@ services:
 
   app:
     image: ghcr.io/lewis159/youtube-transcriber:latest
+    # ── Secrets (Docker Swarm) ──
+    # Sensitive values are NO LONGER passed as plaintext env. They are mounted as
+    # files at /run/secrets/<name> and loaded into the matching env var at startup
+    # by the image ENTRYPOINT (deploy/load-secrets-entrypoint.sh). The secrets
+    # themselves are declared external at the bottom of this file and must be
+    # created out-of-band (see SECRETS_SETUP.md).
+    secrets:
+      - clerk_secret_key
+      - clerk_webhook_secret
+      - supabase_service_role_key
+      - anthropic_api_key
+      - redis_password
+      - stripe_secret_key
+      - stripe_webhook_secret
     environment:
+      # ── PUBLIC / non-sensitive config (safe as plaintext env) ──
       - NODE_ENV=production
       - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
-      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
-      - CLERK_WEBHOOK_SECRET=${CLERK_WEBHOOK_SECRET}
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - STRIPE_PRICE_PRO=${STRIPE_PRICE_PRO}
       - STRIPE_PRICE_STUDIO=${STRIPE_PRICE_STUDIO}
       - STRIPE_PRICE_ENTERPRISE=${STRIPE_PRICE_ENTERPRISE}
       - NEXT_PUBLIC_APP_URL=https://yt.bentech.dev
+      # ── SECRETS now sourced from /run/secrets (loaded → env by entrypoint) ──
+      #   CLERK_SECRET_KEY            ← clerk_secret_key
+      #   CLERK_WEBHOOK_SECRET        ← clerk_webhook_secret
+      #   SUPABASE_SERVICE_ROLE_KEY   ← supabase_service_role_key
+      #   ANTHROPIC_API_KEY           ← anthropic_api_key
+      #   REDIS_PASSWORD              ← redis_password
+      #   STRIPE_SECRET_KEY           ← stripe_secret_key
+      #   STRIPE_WEBHOOK_SECRET       ← stripe_webhook_secret
       # ── Redis HA via Sentinel ──
       # App discovers the CURRENT master through Sentinel (service
       # `redis-failover`, port 26379) rather than pinning a single redis host.
-      # Master name `mymaster`, quorum 2. The single password is in REDIS_PASSWORD.
+      # Master name `mymaster`, quorum 2. REDIS_PASSWORD comes from the secret.
       # See docker-compose.redis.yml + REDIS_HA_NOTES.md.
       - REDIS_URL=sentinel://redis-failover:26379/0?sentinelName=mymaster
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
       # Admin container monitor talks to Docker via the read-only socket proxy,
-      # never the raw socket (security finding #9).
+      # never the raw socket (security finding #9). NOTE: the live stack mounted
+      # the raw /var/run/docker.sock into the app — that mount is REMOVED here;
+      # the app reaches Docker only through docker-socket-proxy via DOCKER_HOST.
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
       # ── Pluggable LLM provider (summaries + Q&A chat) ──
       # The app still thinks it's calling a local OpenAI-compatible endpoint —
@@ -43,9 +62,9 @@ services:
       - LLM_BASE_URL=http://litellm:4000/v1
       # Served model name exposed by LiteLLM (qwen2.5-with-Claude-fallback).
       - LLM_MODEL=yt-llm
-      # Passed through so the per-user "hosted" toggle in lib/claude.ts (which
+      # ANTHROPIC_API_KEY is loaded from the `anthropic_api_key` secret by the
+      # entrypoint, so the per-user "hosted" toggle in lib/claude.ts (which
       # constructs the Anthropic SDK directly, NOT via LiteLLM) keeps working.
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
     deploy:
       replicas: 2
       labels:
@@ -69,9 +88,13 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    # ── Networks — MATCH LIVE ESTATE ──
+    # The live yt-transcriber stack puts `app` on yt-prod + yt-shared (NOT proxy).
+    # NPM (nginx-proxy-manager) reaches the app over the external `yt-shared`
+    # network, so removing yt-shared / swapping to `proxy` would BREAK ingress.
     networks:
       - yt-prod
-      - proxy
+      - yt-shared
 
   # ── LiteLLM HA gateway ──────────────────────────────────────────────────────
   # One OpenAI-compatible endpoint (:4000) in front of Ollama. Load-balances
@@ -79,23 +102,33 @@ services:
   # falls back to hosted Claude (Anthropic) on local failure/timeout. The app
   # talks to THIS, not Ollama directly (LLM_BASE_URL=http://litellm:4000/v1).
   #
-  # ⚠️ NETWORK REQUIREMENT (deploy decision — DO NOT assume): LiteLLM must reach
-  # the Ollama service. The default OLLAMA_BASE_URL points at the Hermes stack's
-  # Ollama (hermes-agent_ollama), which lives on the `hermes-agent_hermes-net`
-  # overlay — but a prior PR removed that external network from THIS stack, so
-  # litellm cannot currently reach it as written. Before deploy, pick ONE:
-  #   (a) join litellm to the external `hermes-agent_hermes-net` overlay (it must
-  #       be created `--attachable`); add it to this service's `networks:` and to
-  #       the top-level `networks:` block as `external: true`; OR
-  #   (b) run a dedicated Ollama service inside this stack on `yt-prod` and point
-  #       OLLAMA_BASE_URL at it.
-  # This is flagged, not silently resolved — see LLM_GATEWAY_NOTES.md.
+  # ── NETWORK REQUIREMENT: LiteLLM must reach the Hermes-stack Ollama ──
+  # OLLAMA_BASE_URL targets the Hermes stack's Ollama (hermes-agent_ollama), which
+  # lives on the `hermes-agent_hermes-net` overlay. litellm is therefore joined to
+  # that external network below (in addition to yt-prod).
+  # ⚠️ PRECONDITION: `hermes-agent_hermes-net` MUST be created `--attachable`
+  #    (an external overlay owned by the Hermes stack). If it is not attachable,
+  #    this stack cannot join it and litellm will not reach Ollama — litellm then
+  #    falls back to hosted Claude. See LLM_GATEWAY_NOTES.md.
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
-    command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
+    # Load the Anthropic key from the secret into env before launching litellm.
+    # The stock litellm image has no secrets→env shim, so we wrap the entrypoint
+    # in a tiny sh that sources /run/secrets/anthropic_api_key (if present) then
+    # execs the litellm CLI. Backward compatible: skips if the file is missing.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        if [ -f /run/secrets/anthropic_api_key ]; then
+          export ANTHROPIC_API_KEY="$$(cat /run/secrets/anthropic_api_key)"
+        fi
+        exec litellm --config /etc/litellm/config.yaml --port 4000
+    secrets:
+      - anthropic_api_key
     environment:
-      # Hosted Claude key for the fallback path.
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # ANTHROPIC_API_KEY (hosted Claude fallback) is sourced from the
+      # `anthropic_api_key` secret by the entrypoint above.
       # Ollama base URL — NO /v1 suffix (LiteLLM's ollama provider adds the path).
       # Default targets the Hermes stack's Ollama; override per the network
       # decision above.
@@ -126,6 +159,9 @@ services:
       start_period: 20s
     networks:
       - yt-prod
+      # External Hermes overlay so litellm can reach hermes-agent_ollama:11434.
+      # Must be created --attachable (see NETWORK REQUIREMENT note above).
+      - hermes-agent_hermes-net
 
   # Tecnativa docker-socket-proxy: the ONLY service that touches the real
   # Docker socket. It exposes a locked-down HTTP API on :2375 to the app on the
@@ -189,11 +225,19 @@ services:
   # to node-label constraints — see REDIS_HA_NOTES.md ("node-label hardening").
   redis-primary:
     image: redis:7-alpine
-    command: >-
-      redis-server --appendonly yes --appendfsync everysec
-      --maxmemory 512mb --maxmemory-policy noeviction
-      --requirepass ${REDIS_PASSWORD} --masterauth ${REDIS_PASSWORD}
-      --loglevel warning
+    # Password is read from the `redis_password` secret at /run/secrets, never
+    # passed as plaintext. A tiny sh wrapper reads the file then execs redis-server.
+    secrets:
+      - redis_password
+    command:
+      - sh
+      - -c
+      - |
+        RP="$$(cat /run/secrets/redis_password)"
+        exec redis-server --appendonly yes --appendfsync everysec \
+          --maxmemory 512mb --maxmemory-policy noeviction \
+          --requirepass "$$RP" --masterauth "$$RP" \
+          --loglevel warning
     volumes:
       - redis-primary-data:/data
     deploy:
@@ -219,13 +263,20 @@ services:
     image: redis:7-alpine
     # Same persistence + auth flags as the primary PLUS --replicaof so it joins
     # as a replica. On a Sentinel-driven failover this node may be PROMOTED to
-    # master, so it must carry masterauth/requirepass identically.
-    command: >-
-      redis-server --appendonly yes --appendfsync everysec
-      --maxmemory 512mb --maxmemory-policy noeviction
-      --requirepass ${REDIS_PASSWORD} --masterauth ${REDIS_PASSWORD}
-      --replicaof redis-primary 6379
-      --loglevel warning
+    # master, so it must carry masterauth/requirepass identically. Password from
+    # the `redis_password` secret (read by the sh wrapper).
+    secrets:
+      - redis_password
+    command:
+      - sh
+      - -c
+      - |
+        RP="$$(cat /run/secrets/redis_password)"
+        exec redis-server --appendonly yes --appendfsync everysec \
+          --maxmemory 512mb --maxmemory-policy noeviction \
+          --requirepass "$$RP" --masterauth "$$RP" \
+          --replicaof redis-primary 6379 \
+          --loglevel warning
     volumes:
       - redis-standby-data:/data
     deploy:
@@ -261,20 +312,26 @@ services:
   # it in prod — see REDIS_HA_NOTES.md ("Failover drill").
   redis-failover:
     image: redis:7-alpine
+    # Password from the `redis_password` secret; read into $RP before writing the
+    # generated sentinel config. (Compose-level ${...} would interpolate at parse
+    # time and leak the value — we deliberately read the file at runtime instead.)
+    secrets:
+      - redis_password
     command:
       - sh
       - -c
       - |
+        RP="$$(cat /run/secrets/redis_password)"
         cat > /tmp/sentinel.conf <<EOF
         port 26379
         sentinel monitor mymaster redis-primary 6379 2
-        sentinel auth-pass mymaster ${REDIS_PASSWORD}
+        sentinel auth-pass mymaster $$RP
         sentinel down-after-milliseconds mymaster 5000
         sentinel failover-timeout mymaster 10000
         sentinel parallel-syncs mymaster 1
-        requirepass ${REDIS_PASSWORD}
+        requirepass $$RP
         sentinel resolve-hostnames yes
-        sentinel announce-ip "$(hostname -i | awk '{print $1}')"
+        sentinel announce-ip "$$(hostname -i | awk '{print $$1}')"
         EOF
         exec redis-server /tmp/sentinel.conf --sentinel
     deploy:
@@ -323,6 +380,12 @@ services:
   # that moves at runtime; it reconnects on restart).
   whisper-worker:
     image: ghcr.io/lewis159/youtube-transcriber-worker:latest
+    # Secrets loaded → env by the worker image ENTRYPOINT
+    # (whisper-worker/load-secrets-entrypoint.sh): redis_password → REDIS_PASSWORD,
+    # supabase_service_role_key → SUPABASE_SERVICE_ROLE_KEY.
+    secrets:
+      - redis_password
+      - supabase_service_role_key
     environment:
       # ── Redis HA via Sentinel ──
       # Worker discovers the current master through Sentinel (`redis-failover`)
@@ -331,12 +394,12 @@ services:
       # runtime — on a Sentinel failover the worker exits and Swarm restarts it,
       # at which point it re-discovers the new master (see restart_policy below).
       - REDIS_URL=sentinel://redis-failover:26379/0?sentinelName=mymaster
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      # REDIS_PASSWORD ← redis_password secret (loaded by entrypoint).
       # ── Supabase (service-role key bypasses RLS) ──
       # SUPABASE_URL reuses the same project URL the app gets via
-      # NEXT_PUBLIC_SUPABASE_URL; the worker also accepts SUPABASE_SERVICE_ROLE_KEY.
+      # NEXT_PUBLIC_SUPABASE_URL (non-sensitive). SUPABASE_SERVICE_ROLE_KEY ←
+      # supabase_service_role_key secret (loaded by entrypoint).
       - SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       # ── Whisper / transcription tuning ──
       - WHISPER_MODEL=${WHISPER_MODEL:-base}
       - WHISPER_CPU_THREADS=${WHISPER_CPU_THREADS:-2}
@@ -399,9 +462,40 @@ configs:
   litellm-config:
     file: ./deploy/litellm-config.yaml
 
+# ── Docker Swarm secrets (external) ──────────────────────────────────────────
+# These are created OUT-OF-BAND in Swarm/Portainer BEFORE deploying this stack
+# (Swarm cannot create `external` secrets for you). Each is mounted read-only at
+# /run/secrets/<name> in the services that reference it, and is encrypted at rest
+# in the Swarm Raft log + invisible to `docker inspect`. See SECRETS_SETUP.md for
+# the exact `docker secret create` commands and the Portainer UI steps.
+secrets:
+  clerk_secret_key:
+    external: true
+  clerk_webhook_secret:
+    external: true
+  supabase_service_role_key:
+    external: true
+  anthropic_api_key:
+    external: true
+  redis_password:
+    external: true
+  stripe_secret_key:
+    external: true
+  stripe_webhook_secret:
+    external: true
+
 networks:
+  # Stack-local overlay for inter-service traffic (app↔redis↔worker↔litellm↔proxy).
   yt-prod:
     driver: overlay
 
-  proxy:
+  # External ingress network shared with nginx-proxy-manager. NPM reaches `app`
+  # over THIS network — it is owned by another stack, so it must already exist.
+  yt-shared:
     external: true
+
+  # External Hermes overlay carrying Ollama (hermes-agent_ollama). litellm joins
+  # it to reach the local model. MUST be created --attachable by the Hermes stack.
+  hermes-agent_hermes-net:
+    external: true
+    name: hermes-agent_hermes-net
