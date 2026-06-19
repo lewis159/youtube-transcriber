@@ -119,9 +119,29 @@ export default async function VideoDetailPage({ params }: { params: Promise<{ id
           </div>
           <div style={{ fontSize: '13px' }}>
             {video.status === 'error'
-              ? 'We could not generate a transcript for this video. Please try again.'
+              ? 'We could not generate a transcript for this video. Please try again from the dashboard.'
               : 'Your transcript is being generated. Check back in a moment.'}
           </div>
+          {video.status === 'error' && video.error_message && (
+            <div
+              style={{
+                marginTop: '20px',
+                marginInline: 'auto',
+                maxWidth: '560px',
+                padding: '12px 16px',
+                background: 'var(--accent-subtle)',
+                border: '1px solid var(--accent-border)',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontFamily: 'monospace',
+                color: 'var(--text-secondary)',
+                textAlign: 'left',
+                wordBreak: 'break-word',
+              }}
+            >
+              {video.error_message}
+            </div>
+          )}
         </div>
       ) : (
         <div className="mobile-single-col" style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '24px', alignItems: 'start' }}>
