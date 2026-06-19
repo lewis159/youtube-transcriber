@@ -185,33 +185,73 @@ and old keys until B is confirmed.
 
 ## 6. Rotation C — `PG_SUPERUSER` / `PG_STANDBY` / `PG_ADMIN` (Spilo)
 
-⚠️ **Most uncertain step.** These are Spilo bootstrap passwords. Spilo applies
-`PGPASSWORD_*` to its managed roles; behaviour on a *restart* (vs first bootstrap)
-should be verified on a non-prod cluster first if possible. `PG_STANDBY_PASSWORD`
-backs **streaming replication** — a mismatch detaches the standby.
+These run on **`ghcr.io/zalando/spilo-16`** under Patroni. The procedure below is
+what we **proved live** on this build — it corrects the earlier "just restart and
+Spilo applies `PGPASSWORD_*`" assumption.
 
-Recommended approach (per member, leader last):
-1. `ALTER ROLE postgres WITH PASSWORD '<new_super>';`,
-   `ALTER ROLE standby WITH PASSWORD '<new_standby>';` (role names per Spilo —
-   confirm with `\du`), `ALTER ROLE admin WITH PASSWORD '<new_admin>';`.
-2. Update ytdb stack env `PG_SUPERUSER_PASSWORD` / `PG_STANDBY_PASSWORD` /
-   `PG_ADMIN_PASSWORD` (these feed `PGPASSWORD_*` on patroni-a/-b).
-3. Rolling-restart the Patroni members (`stop-first` is set) — restart the
-   **replica first**, confirm it rejoins, then the leader (which triggers a
-   failover). Watch `patronictl list` and:
-   ```sql
-   SELECT client_addr, state, sync_state FROM pg_stat_replication;
-   ```
-   The standby must show `streaming`.
-4. Re-confirm `$PGPASSWORD_SUPERUSER` still works for the admin psql pattern
-   (it reads the env — must equal the new superuser pw).
+⚠️ **Key fact: an env-restart alone is a no-op for the actual roles.** Updating
+the `PGPASSWORD_*` env (via `PG_SUPERUSER_PASSWORD` / `PG_STANDBY_PASSWORD` /
+`PG_ADMIN_PASSWORD`) and restarting the Patroni service **regenerates Patroni's
+local config** (`/home/postgres/postgres.yml`) to the new values, **but does NOT
+`ALTER` the live role passwords.** Config and role drift apart, and nothing
+actually rotated. You must also `ALTER ROLE` directly so **role = config**.
 
-**Rollback C:** revert env + `ALTER ROLE … PASSWORD '<old>'` on both members;
-if replication detached, re-init the standby per Patroni (`patronictl reinit`).
+Also note **what Patroni manages**: Patroni only reconciles the **superuser**
+(`postgres`) and **replication** (`standby`) roles. **`admin` and `authenticator`
+are NOT Patroni-managed** → for those, a direct `ALTER` is the only path (there is
+no config side to keep in sync).
 
-> If the risk/uncertainty here outweighs the exposure, an acceptable alternative
-> is to rotate only the **superuser** (our admin credential, the one most worth
-> changing) and leave standby/admin until a tested-on-staging pass.
+**6.1 ALTER the Patroni-managed roles via the leader's local socket.** Peer auth
+over the local socket needs **no password**, so this works regardless of the
+current/new value. Find the leader (`patronictl list`), then:
+```bash
+# postgres (superuser) and standby (replication), on the LEADER container
+sudo docker exec <patroni-leader-container> psql -U postgres \
+  -c "ALTER ROLE postgres PASSWORD '<new_super>';"
+sudo docker exec <patroni-leader-container> psql -U postgres \
+  -c "ALTER ROLE standby PASSWORD '<new_standby>';"
+```
+
+**6.2 ALTER the non-Patroni roles directly** (no config side to reconcile):
+```bash
+sudo docker exec <patroni-leader-container> psql -U postgres \
+  -c "ALTER ROLE admin PASSWORD '<new_admin>';"
+```
+- For **`authenticator`** (see also Rotation A), after the `ALTER` you must also
+  update PgBouncer's `DB_PASSWORD` and PostgREST's `PGRST_DB_URI` so the pooled
+  consumers re-auth with the new value.
+
+**6.3 Sync the config side** so role = config. Update the ytdb stack env
+`PG_SUPERUSER_PASSWORD` / `PG_STANDBY_PASSWORD` / `PG_ADMIN_PASSWORD` (these feed
+`PGPASSWORD_*`) and restart the Patroni service to regenerate
+`/home/postgres/postgres.yml`. **Restarting the leader triggers a failover**
+(leader→replica swap, timeline bumps) — this is **expected and recoverable**, not
+an error.
+
+**6.4 Fix stale HAProxy routing after the failover.** Post-failover, **HAProxy
+can hold stale routing**: *new* direct TCP connections get
+`server closed the connection unexpectedly`, while already-pooled app connections
+keep working. Fix with a **rolling restart of the haproxy service**:
+```bash
+sudo docker service update --force <stack>_haproxy
+```
+
+**6.5 Verify.**
+- `patronictl list` — the replica shows **`streaming`** with **lag 0**.
+- New password works **over TCP** (not just the local socket):
+  ```bash
+  PGPASSWORD='<new_super>' psql -h haproxy -p 5432 -U postgres -d postgres -c 'select 1;'
+  ```
+- Apps return **200** (dashboards load; check `/admin/logs`).
+
+**6.6 Stack-env reconcile trick.** After rotating live, update the **Portainer
+stack's stored env** to the new values. If the live services already match what
+you set, the **stack redeploy is a no-op** (no restart) — this keeps the stored
+config truthful without a second disruptive recreate.
+
+**Rollback C:** `ALTER ROLE … PASSWORD '<old>'` over the leader's local socket for
+each affected role + revert the stack env to the old values; if replication
+detached, re-init the standby per Patroni (`patronictl reinit`).
 
 ---
 
