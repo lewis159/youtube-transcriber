@@ -33,10 +33,22 @@ export async function createVideo(youtubeId: string, clerkUserId: string, title?
   return data
 }
 
-export async function updateVideoStatus(videoId: string, status: string) {
+export async function updateVideoStatus(
+  videoId: string,
+  status: string,
+  errorMessage?: string | null
+) {
+  // Only touch error_message when the caller explicitly passes it: an 'error'
+  // status carries the failure detail, while a later success/retry can clear it
+  // by passing null. Omitting the arg leaves the column untouched.
+  const update: { status: string; error_message?: string | null } = { status }
+  if (errorMessage !== undefined) {
+    update.error_message = errorMessage
+  }
+
   const { data, error } = await supabaseAdmin
     .from('videos')
-    .update({ status })
+    .update(update)
     .eq('id', videoId)
     .select()
     .single()
