@@ -513,12 +513,18 @@ export default function DashboardPage() {
                 className="glass-card mobile-video-row"
                 style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', gap: '20px' }}
               >
-                {/* Thumbnail */}
-                <img
-                  src={`https://img.youtube.com/vi/${video.youtube_id}/mqdefault.jpg`}
-                  alt={video.title}
-                  style={{ width: '120px', height: '68px', objectFit: 'cover', borderRadius: '6px', flexShrink: 0 }}
-                />
+                {/* Thumbnail — clickable through to the video detail / transcript page */}
+                <Link
+                  href={`/video/${video.id}`}
+                  style={{ flexShrink: 0, display: 'block', position: 'relative', lineHeight: 0 }}
+                  title="View transcript"
+                >
+                  <img
+                    src={`https://img.youtube.com/vi/${video.youtube_id}/mqdefault.jpg`}
+                    alt={video.title}
+                    style={{ width: '120px', height: '68px', objectFit: 'cover', borderRadius: '6px' }}
+                  />
+                </Link>
 
                 {/* Info */}
                 <div style={{ flex: 1, minWidth: '160px' }}>
@@ -570,6 +576,20 @@ export default function DashboardPage() {
                     <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                       {new Date(video.created_at).toLocaleDateString()}
                     </span>
+                    {video.status === 'completed' && (
+                      <Link
+                        href={`/video/${video.id}`}
+                        style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: 'var(--accent)',
+                          textDecoration: 'none',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        View transcript →
+                      </Link>
+                    )}
                   </div>
                   {retryError?.id === video.id && (
                     <div role="alert" style={{ marginTop: '6px', fontSize: '12px', color: 'var(--accent)' }}>
