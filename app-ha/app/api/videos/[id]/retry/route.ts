@@ -90,8 +90,9 @@ async function processVideo(videoId: string, youtubeUrl: string) {
     await updateVideoStatus(videoId, 'completed')
   } catch (error) {
     console.error(`Retry processing failed for video ${videoId}:`, error)
+    const message = error instanceof Error ? error.message : 'Failed to process video'
     try {
-      await updateVideoStatus(videoId, 'error')
+      await updateVideoStatus(videoId, 'error', message)
     } catch (statusError) {
       console.error(`Failed to set error status for video ${videoId}:`, statusError)
     }

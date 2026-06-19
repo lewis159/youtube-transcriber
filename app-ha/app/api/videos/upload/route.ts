@@ -140,8 +140,9 @@ async function processVideo(videoId: string, youtubeUrl: string) {
   } catch (error) {
     console.error(`Background processing failed for video ${videoId}:`, error)
     // Best-effort flip to error — swallow any failure here so we never crash.
+    const message = error instanceof Error ? error.message : 'Failed to process video'
     try {
-      await updateVideoStatus(videoId, 'error')
+      await updateVideoStatus(videoId, 'error', message)
     } catch (statusError) {
       console.error(`Failed to set error status for video ${videoId}:`, statusError)
     }
@@ -288,12 +289,12 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Upload error:', error)
 
+    const message = error instanceof Error ? error.message : 'Failed to process video'
+
     // Mark video as errored if the record was already created
     if (video?.id) {
-      await updateVideoStatus(video.id, 'error').catch(() => {})
+      await updateVideoStatus(video.id, 'error', message).catch(() => {})
     }
-
-    const message = error instanceof Error ? error.message : 'Failed to process video'
 
     // Lifecycle log: upload failed. (logEvent never throws — safe in the catch.)
     // userId may be unavailable if auth() itself threw; resolve it best-effort.
