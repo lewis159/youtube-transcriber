@@ -33,7 +33,7 @@ export default async function UsersAndOrgsPage() {
   // derived from `is_trial` (Trial vs Active).
   const { data: userRows, error: usersError } = await supabaseAdmin
     .from('users')
-    .select('id, email, full_name, tier, role, is_trial, created_at')
+    .select('id, email, full_name, tier, role, is_trial, bonus_transcriptions, created_at')
     .order('created_at', { ascending: false })
 
   if (usersError) {
@@ -53,6 +53,7 @@ export default async function UsersAndOrgsPage() {
       joined: fmtDate(u.created_at),
       lastActive: '—',
       role: u.role ?? 'user',
+      bonusTranscriptions: typeof u.bonus_transcriptions === 'number' ? u.bonus_transcriptions : 0,
     }
   })
 

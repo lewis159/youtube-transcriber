@@ -14,6 +14,7 @@ export type User = {
   joined: string
   lastActive: string
   role: string
+  bonusTranscriptions: number
 }
 
 export type Org = {
@@ -75,8 +76,39 @@ function roleLabel(role: string): string {
 
 // ─── User Edit Panel ──────────────────────────────────────────────────────────
 
-function UserEditPanel({ user, onClose, onSave, onDelete }: { user: User; onClose: () => void; onSave: (u: User) => void; onDelete: (u: User) => void }) {
+function UserEditPanel({ user, onClose, onSave, onDelete, onGrantBonus }: {
+  user: User
+  onClose: () => void
+  onSave: (u: User) => void
+  onDelete: (u: User) => void
+  onGrantBonus: (id: string, delta: number, reason: string) => Promise<void>
+}) {
   const [form, setForm] = useState({ ...user })
+  const [bonusAmount, setBonusAmount] = useState('')
+  const [bonusReason, setBonusReason] = useState('')
+  const [granting, setGranting] = useState(false)
+  const [bonusError, setBonusError] = useState<string | null>(null)
+
+  async function handleGrant() {
+    const delta = parseInt(bonusAmount, 10)
+    if (!Number.isInteger(delta) || delta === 0) {
+      setBonusError('Enter a whole, non-zero number')
+      return
+    }
+    setGranting(true)
+    setBonusError(null)
+    try {
+      await onGrantBonus(user.id, delta, bonusReason.trim())
+      // Reflect the new total locally so the panel stays in sync.
+      setForm(f => ({ ...f, bonusTranscriptions: Math.max(0, f.bonusTranscriptions + delta) }))
+      setBonusAmount('')
+      setBonusReason('')
+    } catch (e: any) {
+      setBonusError(e.message || 'Failed to update')
+    } finally {
+      setGranting(false)
+    }
+  }
 
   return (
     <>
@@ -125,6 +157,48 @@ function UserEditPanel({ user, onClose, onSave, onDelete }: { user: User; onClos
               style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', background: '#111', border: '0.5px solid #2a2a2a', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}>
               {ROLES.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
             </select>
+          </div>
+
+          {/* Bonus transcriptions — compensate for platform errors. Adds to
+              the user's monthly limit on top of their tier allowance. */}
+          <div style={{ padding: '16px', border: '0.5px solid #2a2a2a', borderRadius: '8px', background: 'rgba(255,255,255,0.02)' }}>
+            <label style={{ fontSize: '11px', color: '#555', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Extra transcriptions
+            </label>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+              Granted bonus this month:{' '}
+              <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontFamily: 'monospace' }}>{form.bonusTranscriptions}</span>
+              <span style={{ color: '#555' }}> (added on top of the tier limit)</span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+              <input
+                type="number"
+                value={bonusAmount}
+                onChange={e => setBonusAmount(e.target.value)}
+                placeholder="e.g. 5"
+                style={{ width: '90px', padding: '8px 12px', borderRadius: '6px', background: '#111', border: '0.5px solid #2a2a2a', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
+              />
+              <input
+                type="text"
+                value={bonusReason}
+                onChange={e => setBonusReason(e.target.value)}
+                placeholder="Reason (e.g. failed jobs on 18 Jun)"
+                style={{ flex: 1, padding: '8px 12px', borderRadius: '6px', background: '#111', border: '0.5px solid #2a2a2a', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
+              />
+            </div>
+            <button
+              onClick={handleGrant}
+              disabled={granting}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', background: granting ? '#2a2a2a' : '#1d4ed8', border: 'none', color: '#fff', fontSize: '12px', cursor: granting ? 'default' : 'pointer', fontWeight: 600 }}
+            >
+              {granting ? 'Saving…' : 'Grant / adjust transcriptions'}
+            </button>
+            <div style={{ fontSize: '11px', color: '#555', marginTop: '8px' }}>
+              Use a positive number to add, negative to remove. Applied immediately and audited.
+            </div>
+            {bonusError && (
+              <div style={{ marginTop: '8px', fontSize: '12px', color: '#E53935' }}>{bonusError}</div>
+            )}
           </div>
 
           <div style={{ marginTop: '8px', padding: '16px', border: '0.5px solid rgba(229,57,53,0.2)', borderRadius: '8px', background: 'rgba(229,57,53,0.03)' }}>
@@ -184,6 +258,25 @@ export default function UsersAndOrgsClient({ initialUsers, initialOrgs }: { init
       setUsers(prev) // rollback
       setError(e.message)
     }
+  }
+
+  async function handleGrantBonus(id: string, delta: number, reason: string) {
+    setError(null)
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bonusDelta: delta, reason }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || `Request failed (${res.status})`)
+    }
+    // Server returns the authoritative new total (floored at 0).
+    const data = await res.json().catch(() => ({}))
+    const newBonus: number | undefined = data?.user?.bonus_transcriptions
+    setUsers(p => p.map(u => u.id === id
+      ? { ...u, bonusTranscriptions: typeof newBonus === 'number' ? newBonus : Math.max(0, u.bonusTranscriptions + delta) }
+      : u))
   }
 
   async function handleDeleteUser(user: User) {
@@ -437,7 +530,7 @@ export default function UsersAndOrgsClient({ initialUsers, initialOrgs }: { init
 
       {/* Slide-over panel */}
       {editingUser && (
-        <UserEditPanel user={editingUser} onClose={() => setEditingUser(null)} onSave={handleSaveUser} onDelete={handleDeleteUser} />
+        <UserEditPanel user={editingUser} onClose={() => setEditingUser(null)} onSave={handleSaveUser} onDelete={handleDeleteUser} onGrantBonus={handleGrantBonus} />
       )}
     </div>
   )

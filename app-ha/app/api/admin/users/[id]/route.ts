@@ -12,9 +12,18 @@ const ROLES = ['user', 'org_admin', 'support', 'global_admin']
 const STATUSES = ['Active', 'Trial']
 
 /**
- * PATCH — update an existing user's tier / role / status.
- * Body may contain any subset of { tier, role, status }.
- * Admin-only (global_admin), enforced by requireAdmin().
+ * PATCH — update an existing user's tier / role / status, and/or grant extra
+ * monthly transcriptions.
+ *
+ * Body may contain any subset of:
+ *   { tier, role, status }              — existing field edits
+ *   { bonusDelta: number, reason? }     — ADD this many extra transcriptions
+ *                                          (negative removes; floored at 0)
+ *
+ * `bonusDelta` is the support/compensation lever: it increases the user's
+ * effective monthly transcription limit (tier_limit + bonus_transcriptions)
+ * without changing their tier. Admin-only (global_admin), enforced by
+ * requireAdmin(). Every change is audited via logAudit().
  */
 export async function PATCH(
   req: NextRequest,
@@ -26,7 +35,7 @@ export async function PATCH(
   const { userId } = await auth()
   const { id } = params
 
-  let body: { tier?: unknown; role?: unknown; status?: unknown }
+  let body: { tier?: unknown; role?: unknown; status?: unknown; bonusDelta?: unknown; reason?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -59,22 +68,49 @@ export async function PATCH(
     update.is_trial = body.status === 'Trial'
   }
 
-  if (Object.keys(update).length === 0) {
+  // bonusDelta: add (or remove, if negative) extra monthly transcriptions.
+  // Read-modify-write against users.bonus_transcriptions, floored at 0.
+  let bonusDelta: number | undefined
+  if (body.bonusDelta !== undefined) {
+    if (typeof body.bonusDelta !== 'number' || !Number.isFinite(body.bonusDelta) || !Number.isInteger(body.bonusDelta)) {
+      return NextResponse.json({ error: 'bonusDelta must be a whole number' }, { status: 400 })
+    }
+    if (body.bonusDelta === 0) {
+      return NextResponse.json({ error: 'bonusDelta must be non-zero' }, { status: 400 })
+    }
+    bonusDelta = body.bonusDelta
+  }
+
+  if (body.reason !== undefined && typeof body.reason !== 'string') {
+    return NextResponse.json({ error: 'reason must be a string' }, { status: 400 })
+  }
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+
+  if (Object.keys(update).length === 0 && bonusDelta === undefined) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
   }
 
   // Fetch the current row so we can emit before/after audit snapshots.
   const { data: before } = await supabaseAdmin
     .from('users')
-    .select('email, tier, role, is_trial')
+    .select('email, tier, role, is_trial, bonus_transcriptions')
     .eq('id', id)
     .single()
+
+  // Fold the bonus grant/adjustment into the same UPDATE. Floor at 0 so a
+  // removal can never push the column negative (also enforced by a CHECK).
+  let newBonus: number | undefined
+  if (bonusDelta !== undefined) {
+    const currentBonus = typeof before?.bonus_transcriptions === 'number' ? before.bonus_transcriptions : 0
+    newBonus = Math.max(0, currentBonus + bonusDelta)
+    update.bonus_transcriptions = newBonus
+  }
 
   const { data: updated, error } = await supabaseAdmin
     .from('users')
     .update(update)
     .eq('id', id)
-    .select('id, email, tier, role, is_trial')
+    .select('id, email, tier, role, is_trial, bonus_transcriptions')
     .single()
 
   if (error) {
@@ -114,6 +150,19 @@ export async function PATCH(
       actorClerkId: userId,
       oldValue: beforeStatus,
       newValue: afterStatus,
+    })
+  }
+  if (bonusDelta !== undefined && newBonus !== undefined) {
+    const oldBonus = typeof before?.bonus_transcriptions === 'number' ? before.bonus_transcriptions : 0
+    const sign = bonusDelta > 0 ? '+' : ''
+    await logAudit({
+      action: 'user_bonus_transcriptions_change',
+      target: 'user',
+      details: `Bonus transcriptions ${sign}${bonusDelta} (${oldBonus} → ${newBonus}) for ${email}` +
+        (reason ? ` — ${reason}` : ''),
+      actorClerkId: userId,
+      oldValue: oldBonus,
+      newValue: newBonus,
     })
   }
 

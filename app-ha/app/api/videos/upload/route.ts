@@ -40,6 +40,28 @@ async function getUserTier(clerkUserId: string): Promise<string> {
 }
 
 /**
+ * Read the admin/support-granted extra monthly transcriptions for a user
+ * (users.bonus_transcriptions, migration 016). These are ADDED to the user's
+ * per-tier monthly limit so support can compensate for platform errors without
+ * changing the user's tier. Best-effort: any failure resolves to 0 so a DB
+ * hiccup never inflates the quota and never blocks the existing limit logic.
+ */
+async function getBonusTranscriptions(clerkUserId: string): Promise<number> {
+  try {
+    const supabaseUserId = await getSupabaseUserId(clerkUserId)
+    const { data } = await supabaseAdmin
+      .from('users')
+      .select('bonus_transcriptions')
+      .eq('id', supabaseUserId)
+      .single()
+    const bonus = data?.bonus_transcriptions
+    return typeof bonus === 'number' && bonus > 0 ? bonus : 0
+  } catch {
+    return 0
+  }
+}
+
+/**
  * Count how many videos this user has created in the CURRENT calendar month
  * (UTC). Used to enforce the per-tier monthly transcription quota. Uses a HEAD
  * count query so we don't pull rows. Counting the shared `videos` table makes
@@ -130,8 +152,14 @@ export async function POST(request: NextRequest) {
     // query itself fails we fall through and let the upload proceed rather than
     // hard-blocking a paying user on a transient DB hiccup.
     const tier = await getUserTier(userId)
-    const limit = TIER_TRANSCRIPTION_LIMITS[tier] ?? TIER_TRANSCRIPTION_LIMITS.starter
-    if (limit != null) {
+    const tierLimit = TIER_TRANSCRIPTION_LIMITS[tier] ?? TIER_TRANSCRIPTION_LIMITS.starter
+    if (tierLimit != null) {
+      // Effective limit = per-tier monthly limit + admin/support-granted bonus
+      // (users.bonus_transcriptions). The bonus lets support compensate for
+      // platform errors without bumping the user's tier. `tierLimit` is finite
+      // here (unlimited tiers return null and skip this block entirely).
+      const bonus = await getBonusTranscriptions(userId)
+      const limit = tierLimit + bonus
       try {
         const used = await countVideosThisMonth(userId)
         if (used >= limit) {
