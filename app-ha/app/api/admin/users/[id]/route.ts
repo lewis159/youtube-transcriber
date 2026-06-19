@@ -12,18 +12,34 @@ const ROLES = ['user', 'org_admin', 'support', 'global_admin']
 const STATUSES = ['Active', 'Trial']
 
 /**
+ * First day of the CURRENT calendar month (UTC) as a YYYY-MM-DD string. This
+ * is the `period_month` a new grant carries so it applies to THIS month only.
+ */
+function currentPeriodMonth(): string {
+  const now = new Date()
+  const first = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  return first.toISOString().slice(0, 10)
+}
+
+/**
  * PATCH — update an existing user's tier / role / status, and/or grant extra
- * monthly transcriptions.
+ * transcriptions FOR THE CURRENT MONTH.
  *
  * Body may contain any subset of:
  *   { tier, role, status }              — existing field edits
- *   { bonusDelta: number, reason? }     — ADD this many extra transcriptions
- *                                          (negative removes; floored at 0)
+ *   { grantAmount: number, reason? }    — grant this many extra transcriptions
+ *                                          for the CURRENT calendar month
+ *                                          (negative = correction; both are
+ *                                          recorded as immutable grant rows)
  *
- * `bonusDelta` is the support/compensation lever: it increases the user's
- * effective monthly transcription limit (tier_limit + bonus_transcriptions)
- * without changing their tier. Admin-only (global_admin), enforced by
- * requireAdmin(). Every change is audited via logAudit().
+ * `grantAmount` is the support/compensation lever: it inserts a row in
+ * transcription_grants for the current `period_month`, which raises the user's
+ * effective monthly limit (tier_limit + SUM(grants this month)) WITHOUT
+ * changing their tier. Grants are ONE-TIME — they expire automatically at month
+ * rollover. Corrections are recorded as negative-amount rows (never by mutating
+ * or deleting prior grants), preserving a full audit trail. Admin-only
+ * (global_admin), enforced by requireAdmin(). Every change is audited via
+ * logAudit().
  */
 export async function PATCH(
   req: NextRequest,
@@ -35,7 +51,7 @@ export async function PATCH(
   const { userId } = await auth()
   const { id } = params
 
-  let body: { tier?: unknown; role?: unknown; status?: unknown; bonusDelta?: unknown; reason?: unknown }
+  let body: { tier?: unknown; role?: unknown; status?: unknown; grantAmount?: unknown; reason?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -68,17 +84,17 @@ export async function PATCH(
     update.is_trial = body.status === 'Trial'
   }
 
-  // bonusDelta: add (or remove, if negative) extra monthly transcriptions.
-  // Read-modify-write against users.bonus_transcriptions, floored at 0.
-  let bonusDelta: number | undefined
-  if (body.bonusDelta !== undefined) {
-    if (typeof body.bonusDelta !== 'number' || !Number.isFinite(body.bonusDelta) || !Number.isInteger(body.bonusDelta)) {
-      return NextResponse.json({ error: 'bonusDelta must be a whole number' }, { status: 400 })
+  // grantAmount: grant (or correct, if negative) extra transcriptions for the
+  // CURRENT calendar month. Recorded as an immutable transcription_grants row.
+  let grantAmount: number | undefined
+  if (body.grantAmount !== undefined) {
+    if (typeof body.grantAmount !== 'number' || !Number.isFinite(body.grantAmount) || !Number.isInteger(body.grantAmount)) {
+      return NextResponse.json({ error: 'grantAmount must be a whole number' }, { status: 400 })
     }
-    if (body.bonusDelta === 0) {
-      return NextResponse.json({ error: 'bonusDelta must be non-zero' }, { status: 400 })
+    if (body.grantAmount === 0) {
+      return NextResponse.json({ error: 'grantAmount must be non-zero' }, { status: 400 })
     }
-    bonusDelta = body.bonusDelta
+    grantAmount = body.grantAmount
   }
 
   if (body.reason !== undefined && typeof body.reason !== 'string') {
@@ -86,38 +102,82 @@ export async function PATCH(
   }
   const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
 
-  if (Object.keys(update).length === 0 && bonusDelta === undefined) {
+  if (Object.keys(update).length === 0 && grantAmount === undefined) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
   }
 
   // Fetch the current row so we can emit before/after audit snapshots.
   const { data: before } = await supabaseAdmin
     .from('users')
-    .select('email, tier, role, is_trial, bonus_transcriptions')
+    .select('email, tier, role, is_trial')
     .eq('id', id)
     .single()
 
-  // Fold the bonus grant/adjustment into the same UPDATE. Floor at 0 so a
-  // removal can never push the column negative (also enforced by a CHECK).
-  let newBonus: number | undefined
-  if (bonusDelta !== undefined) {
-    const currentBonus = typeof before?.bonus_transcriptions === 'number' ? before.bonus_transcriptions : 0
-    newBonus = Math.max(0, currentBonus + bonusDelta)
-    update.bonus_transcriptions = newBonus
-  }
+  // Apply the tier/role/status field edits (if any). When only a grant is being
+  // made there is nothing to UPDATE, so skip the call entirely.
+  let updated: { id: string; email: string; tier: string; role: string; is_trial: boolean } | null = null
+  if (Object.keys(update).length > 0) {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .update(update)
+      .eq('id', id)
+      .select('id, email, tier, role, is_trial')
+      .single()
 
-  const { data: updated, error } = await supabaseAdmin
-    .from('users')
-    .update(update)
-    .eq('id', id)
-    .select('id, email, tier, role, is_trial, bonus_transcriptions')
-    .single()
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    updated = data
   }
 
   const email = before?.email ?? id
+
+  // Insert the current-month grant row (if requested). The grant applies only
+  // to this calendar month (period_month) and expires at rollover — it is NOT a
+  // permanent bump. Corrections are recorded as negative-amount rows, never by
+  // mutating/deleting prior grants. granted_by = acting admin's public.users.id.
+  let monthTotal: number | undefined
+  if (grantAmount !== undefined) {
+    const period = currentPeriodMonth()
+
+    // Resolve the acting admin's public.users.id (uuid) from their Clerk id, to
+    // record who granted it. Best-effort: a null is fine if it can't resolve.
+    let grantedBy: string | null = null
+    if (userId) {
+      const { data: adminRow } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('clerk_user_id', userId)
+        .single()
+      grantedBy = adminRow?.id ?? null
+    }
+
+    const { error: grantErr } = await supabaseAdmin
+      .from('transcription_grants')
+      .insert({
+        user_id: id,
+        amount: grantAmount,
+        period_month: period,
+        reason: reason || null,
+        granted_by: grantedBy,
+      })
+
+    if (grantErr) {
+      return NextResponse.json({ error: grantErr.message }, { status: 500 })
+    }
+
+    // Recompute this user's net granted total for the current month so the UI
+    // can reflect the authoritative figure (corrections included).
+    const { data: monthRows } = await supabaseAdmin
+      .from('transcription_grants')
+      .select('amount')
+      .eq('user_id', id)
+      .eq('period_month', period)
+    monthTotal = (monthRows ?? []).reduce(
+      (sum, row) => sum + (typeof row.amount === 'number' ? row.amount : 0),
+      0
+    )
+  }
 
   // Emit a distinct audit row per changed field.
   if (update.tier !== undefined && before?.tier !== update.tier) {
@@ -152,21 +212,28 @@ export async function PATCH(
       newValue: afterStatus,
     })
   }
-  if (bonusDelta !== undefined && newBonus !== undefined) {
-    const oldBonus = typeof before?.bonus_transcriptions === 'number' ? before.bonus_transcriptions : 0
-    const sign = bonusDelta > 0 ? '+' : ''
+  if (grantAmount !== undefined) {
+    const sign = grantAmount > 0 ? '+' : ''
+    const period = currentPeriodMonth()
     await logAudit({
-      action: 'user_bonus_transcriptions_change',
+      action: 'user_transcription_grant',
       target: 'user',
-      details: `Bonus transcriptions ${sign}${bonusDelta} (${oldBonus} → ${newBonus}) for ${email}` +
+      details: `Granted ${sign}${grantAmount} transcription(s) for ${period.slice(0, 7)} to ${email} ` +
+        `(month total now ${monthTotal ?? grantAmount})` +
         (reason ? ` — ${reason}` : ''),
       actorClerkId: userId,
-      oldValue: oldBonus,
-      newValue: newBonus,
+      oldValue: null,
+      newValue: grantAmount,
     })
   }
 
-  return NextResponse.json({ ok: true, user: updated })
+  // Return the authoritative figures the UI needs: updated user fields (if any
+  // were changed) and the user's net granted total for the current month.
+  return NextResponse.json({
+    ok: true,
+    user: updated,
+    monthGrantTotal: monthTotal,
+  })
 }
 
 /**

@@ -33,11 +33,34 @@ export default async function UsersAndOrgsPage() {
   // derived from `is_trial` (Trial vs Active).
   const { data: userRows, error: usersError } = await supabaseAdmin
     .from('users')
-    .select('id, email, full_name, tier, role, is_trial, bonus_transcriptions, created_at')
+    .select('id, email, full_name, tier, role, is_trial, created_at')
     .order('created_at', { ascending: false })
 
   if (usersError) {
     console.error('[admin/users] Supabase users fetch error:', usersError.message)
+  }
+
+  // ── Current-month transcription grants ───────────────────────────────────
+  // One-time, current-month grants live in transcription_grants (migration
+  // 017). Sum each user's net granted amount for THIS calendar month so the
+  // admin panel can show "granted this month". Grants for other months don't
+  // count (they expire at rollover). Best-effort: a failure shows 0 for all.
+  const now = new Date()
+  const periodMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+    .toISOString()
+    .slice(0, 10)
+  const grantTotals: Record<string, number> = {}
+  const { data: grantRows, error: grantsError } = await supabaseAdmin
+    .from('transcription_grants')
+    .select('user_id, amount')
+    .eq('period_month', periodMonth)
+  if (grantsError) {
+    console.error('[admin/users] Supabase transcription_grants fetch error:', grantsError.message)
+  }
+  for (const g of grantRows ?? []) {
+    const uid = (g as any).user_id as string
+    const amt = typeof (g as any).amount === 'number' ? (g as any).amount : 0
+    grantTotals[uid] = (grantTotals[uid] ?? 0) + amt
   }
 
   const initialUsers: User[] = (userRows ?? []).map((u) => {
@@ -53,7 +76,7 @@ export default async function UsersAndOrgsPage() {
       joined: fmtDate(u.created_at),
       lastActive: '—',
       role: u.role ?? 'user',
-      bonusTranscriptions: typeof u.bonus_transcriptions === 'number' ? u.bonus_transcriptions : 0,
+      monthGrantTotal: grantTotals[u.id] ?? 0,
     }
   })
 

@@ -40,22 +40,39 @@ async function getUserTier(clerkUserId: string): Promise<string> {
 }
 
 /**
- * Read the admin/support-granted extra monthly transcriptions for a user
- * (users.bonus_transcriptions, migration 016). These are ADDED to the user's
- * per-tier monthly limit so support can compensate for platform errors without
- * changing the user's tier. Best-effort: any failure resolves to 0 so a DB
- * hiccup never inflates the quota and never blocks the existing limit logic.
+ * First day of the CURRENT calendar month (UTC), as a YYYY-MM-DD string —
+ * the value a grant's `period_month` carries when it applies to this month.
  */
-async function getBonusTranscriptions(clerkUserId: string): Promise<number> {
+function currentPeriodMonth(): string {
+  const now = new Date()
+  const first = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  return first.toISOString().slice(0, 10)
+}
+
+/**
+ * Sum the admin/support-granted extra transcriptions that apply to the CURRENT
+ * calendar month (transcription_grants, migration 017). Grants are ONE-TIME:
+ * each row carries the `period_month` it applies to, so only grants issued for
+ * THIS month count — next month they no longer apply and the quota reverts to
+ * the plain tier limit. The total is ADDED to the user's per-tier monthly limit
+ * so support can compensate for failed runs this month without changing tier.
+ *
+ * Negative-amount rows (corrections) are summed too, so the net total is
+ * authoritative. Best-effort: any failure resolves to 0 so a DB hiccup never
+ * inflates the quota and never blocks the existing limit logic.
+ */
+async function getCurrentMonthGrantTotal(clerkUserId: string): Promise<number> {
   try {
     const supabaseUserId = await getSupabaseUserId(clerkUserId)
     const { data } = await supabaseAdmin
-      .from('users')
-      .select('bonus_transcriptions')
-      .eq('id', supabaseUserId)
-      .single()
-    const bonus = data?.bonus_transcriptions
-    return typeof bonus === 'number' && bonus > 0 ? bonus : 0
+      .from('transcription_grants')
+      .select('amount')
+      .eq('user_id', supabaseUserId)
+      .eq('period_month', currentPeriodMonth())
+    if (!Array.isArray(data)) return 0
+    const total = data.reduce((sum, row) => sum + (typeof row.amount === 'number' ? row.amount : 0), 0)
+    // Never let corrections push the effective bonus below 0.
+    return total > 0 ? total : 0
   } catch {
     return 0
   }
@@ -154,11 +171,12 @@ export async function POST(request: NextRequest) {
     const tier = await getUserTier(userId)
     const tierLimit = TIER_TRANSCRIPTION_LIMITS[tier] ?? TIER_TRANSCRIPTION_LIMITS.starter
     if (tierLimit != null) {
-      // Effective limit = per-tier monthly limit + admin/support-granted bonus
-      // (users.bonus_transcriptions). The bonus lets support compensate for
-      // platform errors without bumping the user's tier. `tierLimit` is finite
-      // here (unlimited tiers return null and skip this block entirely).
-      const bonus = await getBonusTranscriptions(userId)
+      // Effective limit = per-tier monthly limit + admin/support-granted grants
+      // for THIS calendar month (transcription_grants, migration 017). Grants
+      // are one-time: they apply only to the month they were issued for, so the
+      // bump expires automatically at month rollover. `tierLimit` is finite here
+      // (unlimited tiers return null and skip this block entirely).
+      const bonus = await getCurrentMonthGrantTotal(userId)
       const limit = tierLimit + bonus
       try {
         const used = await countVideosThisMonth(userId)
