@@ -40,6 +40,45 @@ async function getUserTier(clerkUserId: string): Promise<string> {
 }
 
 /**
+ * First day of the CURRENT calendar month (UTC), as a YYYY-MM-DD string —
+ * the value a grant's `period_month` carries when it applies to this month.
+ */
+function currentPeriodMonth(): string {
+  const now = new Date()
+  const first = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  return first.toISOString().slice(0, 10)
+}
+
+/**
+ * Sum the admin/support-granted extra transcriptions that apply to the CURRENT
+ * calendar month (transcription_grants, migration 017). Grants are ONE-TIME:
+ * each row carries the `period_month` it applies to, so only grants issued for
+ * THIS month count — next month they no longer apply and the quota reverts to
+ * the plain tier limit. The total is ADDED to the user's per-tier monthly limit
+ * so support can compensate for failed runs this month without changing tier.
+ *
+ * Negative-amount rows (corrections) are summed too, so the net total is
+ * authoritative. Best-effort: any failure resolves to 0 so a DB hiccup never
+ * inflates the quota and never blocks the existing limit logic.
+ */
+async function getCurrentMonthGrantTotal(clerkUserId: string): Promise<number> {
+  try {
+    const supabaseUserId = await getSupabaseUserId(clerkUserId)
+    const { data } = await supabaseAdmin
+      .from('transcription_grants')
+      .select('amount')
+      .eq('user_id', supabaseUserId)
+      .eq('period_month', currentPeriodMonth())
+    if (!Array.isArray(data)) return 0
+    const total = data.reduce((sum, row) => sum + (typeof row.amount === 'number' ? row.amount : 0), 0)
+    // Never let corrections push the effective bonus below 0.
+    return total > 0 ? total : 0
+  } catch {
+    return 0
+  }
+}
+
+/**
  * Count how many videos this user has created in the CURRENT calendar month
  * (UTC). Used to enforce the per-tier monthly transcription quota. Uses a HEAD
  * count query so we don't pull rows. Counting the shared `videos` table makes
@@ -130,8 +169,15 @@ export async function POST(request: NextRequest) {
     // query itself fails we fall through and let the upload proceed rather than
     // hard-blocking a paying user on a transient DB hiccup.
     const tier = await getUserTier(userId)
-    const limit = TIER_TRANSCRIPTION_LIMITS[tier] ?? TIER_TRANSCRIPTION_LIMITS.starter
-    if (limit != null) {
+    const tierLimit = TIER_TRANSCRIPTION_LIMITS[tier] ?? TIER_TRANSCRIPTION_LIMITS.starter
+    if (tierLimit != null) {
+      // Effective limit = per-tier monthly limit + admin/support-granted grants
+      // for THIS calendar month (transcription_grants, migration 017). Grants
+      // are one-time: they apply only to the month they were issued for, so the
+      // bump expires automatically at month rollover. `tierLimit` is finite here
+      // (unlimited tiers return null and skip this block entirely).
+      const bonus = await getCurrentMonthGrantTotal(userId)
+      const limit = tierLimit + bonus
       try {
         const used = await countVideosThisMonth(userId)
         if (used >= limit) {

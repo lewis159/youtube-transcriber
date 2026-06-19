@@ -14,6 +14,8 @@ export type User = {
   joined: string
   lastActive: string
   role: string
+  /** Net transcriptions granted to this user for the CURRENT calendar month. */
+  monthGrantTotal: number
 }
 
 export type Org = {
@@ -75,8 +77,40 @@ function roleLabel(role: string): string {
 
 // ─── User Edit Panel ──────────────────────────────────────────────────────────
 
-function UserEditPanel({ user, onClose, onSave, onDelete }: { user: User; onClose: () => void; onSave: (u: User) => void; onDelete: (u: User) => void }) {
+function UserEditPanel({ user, onClose, onSave, onDelete, onGrant }: {
+  user: User
+  onClose: () => void
+  onSave: (u: User) => void
+  onDelete: (u: User) => void
+  onGrant: (id: string, amount: number, reason: string) => Promise<number | undefined>
+}) {
   const [form, setForm] = useState({ ...user })
+  const [grantAmount, setGrantAmount] = useState('')
+  const [grantReason, setGrantReason] = useState('')
+  const [granting, setGranting] = useState(false)
+  const [grantError, setGrantError] = useState<string | null>(null)
+
+  async function handleGrant() {
+    const amount = parseInt(grantAmount, 10)
+    if (!Number.isInteger(amount) || amount === 0) {
+      setGrantError('Enter a whole, non-zero number')
+      return
+    }
+    setGranting(true)
+    setGrantError(null)
+    try {
+      const newTotal = await onGrant(user.id, amount, grantReason.trim())
+      // Reflect the authoritative month total (server-computed) so the panel
+      // stays in sync; fall back to a local sum if the server didn't return it.
+      setForm(f => ({ ...f, monthGrantTotal: typeof newTotal === 'number' ? newTotal : f.monthGrantTotal + amount }))
+      setGrantAmount('')
+      setGrantReason('')
+    } catch (e: any) {
+      setGrantError(e.message || 'Failed to grant')
+    } finally {
+      setGranting(false)
+    }
+  }
 
   return (
     <>
@@ -125,6 +159,49 @@ function UserEditPanel({ user, onClose, onSave, onDelete }: { user: User; onClos
               style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', background: '#111', border: '0.5px solid #2a2a2a', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}>
               {ROLES.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
             </select>
+          </div>
+
+          {/* Extra transcriptions — one-time, CURRENT MONTH ONLY. Grants extra
+              transcriptions on top of the tier limit to compensate for failed
+              runs this month. Grants expire automatically at month rollover. */}
+          <div style={{ padding: '16px', border: '0.5px solid #2a2a2a', borderRadius: '8px', background: 'rgba(255,255,255,0.02)' }}>
+            <label style={{ fontSize: '11px', color: '#555', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Extra transcriptions (this month)
+            </label>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+              Granted this month:{' '}
+              <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontFamily: 'monospace' }}>{form.monthGrantTotal}</span>
+              <span style={{ color: '#555' }}> (added on top of the tier limit; expires at month end)</span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+              <input
+                type="number"
+                value={grantAmount}
+                onChange={e => setGrantAmount(e.target.value)}
+                placeholder="e.g. 5"
+                style={{ width: '90px', padding: '8px 12px', borderRadius: '6px', background: '#111', border: '0.5px solid #2a2a2a', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
+              />
+              <input
+                type="text"
+                value={grantReason}
+                onChange={e => setGrantReason(e.target.value)}
+                placeholder="Reason (e.g. failed jobs on 18 Jun)"
+                style={{ flex: 1, padding: '8px 12px', borderRadius: '6px', background: '#111', border: '0.5px solid #2a2a2a', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
+              />
+            </div>
+            <button
+              onClick={handleGrant}
+              disabled={granting}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', background: granting ? '#2a2a2a' : '#1d4ed8', border: 'none', color: '#fff', fontSize: '12px', cursor: granting ? 'default' : 'pointer', fontWeight: 600 }}
+            >
+              {granting ? 'Saving…' : 'Grant transcriptions (this month)'}
+            </button>
+            <div style={{ fontSize: '11px', color: '#555', marginTop: '8px' }}>
+              One-time grant for the current month only — it expires at month rollover. Use a negative number to correct an over-grant. Applied immediately and audited.
+            </div>
+            {grantError && (
+              <div style={{ marginTop: '8px', fontSize: '12px', color: '#E53935' }}>{grantError}</div>
+            )}
           </div>
 
           <div style={{ marginTop: '8px', padding: '16px', border: '0.5px solid rgba(229,57,53,0.2)', borderRadius: '8px', background: 'rgba(229,57,53,0.03)' }}>
@@ -184,6 +261,29 @@ export default function UsersAndOrgsClient({ initialUsers, initialOrgs }: { init
       setUsers(prev) // rollback
       setError(e.message)
     }
+  }
+
+  // Grant N extra transcriptions to a user for the CURRENT month (negative =
+  // correction). Returns the server-computed net month total so the panel can
+  // show the authoritative figure.
+  async function handleGrant(id: string, amount: number, reason: string): Promise<number | undefined> {
+    setError(null)
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ grantAmount: amount, reason }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || `Request failed (${res.status})`)
+    }
+    // Server returns the authoritative net month total (corrections included).
+    const data = await res.json().catch(() => ({}))
+    const monthTotal: number | undefined = typeof data?.monthGrantTotal === 'number' ? data.monthGrantTotal : undefined
+    setUsers(p => p.map(u => u.id === id
+      ? { ...u, monthGrantTotal: typeof monthTotal === 'number' ? monthTotal : u.monthGrantTotal + amount }
+      : u))
+    return monthTotal
   }
 
   async function handleDeleteUser(user: User) {
@@ -437,7 +537,7 @@ export default function UsersAndOrgsClient({ initialUsers, initialOrgs }: { init
 
       {/* Slide-over panel */}
       {editingUser && (
-        <UserEditPanel user={editingUser} onClose={() => setEditingUser(null)} onSave={handleSaveUser} onDelete={handleDeleteUser} />
+        <UserEditPanel user={editingUser} onClose={() => setEditingUser(null)} onSave={handleSaveUser} onDelete={handleDeleteUser} onGrant={handleGrant} />
       )}
     </div>
   )
