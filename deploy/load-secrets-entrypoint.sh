@@ -20,10 +20,16 @@ set -e
 
 # Map of <secret-file-name>:<ENV_VAR_NAME>.
 # Add new pairs here as more secrets are migrated.
+#
+# NOTE: pairs are processed top-to-bottom, so when two files map to the same env
+# var the LAST present file wins. `supabase_service_role_key_v3` is the prod
+# secret name and is listed after the legacy `supabase_service_role_key` so that,
+# if both happen to be mounted, the v3 secret takes precedence.
 SECRET_MAP="
 clerk_secret_key:CLERK_SECRET_KEY
 clerk_webhook_secret:CLERK_WEBHOOK_SECRET
 supabase_service_role_key:SUPABASE_SERVICE_ROLE_KEY
+supabase_service_role_key_v3:SUPABASE_SERVICE_ROLE_KEY
 anthropic_api_key:ANTHROPIC_API_KEY
 redis_password:REDIS_PASSWORD
 stripe_secret_key:STRIPE_SECRET_KEY
@@ -38,7 +44,9 @@ for pair in $SECRET_MAP; do
   file_name="${pair%%:*}"
   var_name="${pair##*:}"
   secret_path="$SECRETS_DIR/$file_name"
-  if [ -f "$secret_path" ]; then
+  # Only load when the secret file exists AND is non-empty (`-s`). An absent or
+  # empty file is skipped so any pre-existing env value is left untouched.
+  if [ -s "$secret_path" ]; then
     # Export the var with the file contents. `cat` (not $(<)) for POSIX sh.
     export "$var_name=$(cat "$secret_path")"
   fi
