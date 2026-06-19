@@ -36,18 +36,20 @@
 -- ============================================================
 
 -- ── transcription_grants ────────────────────────────────────
--- One row per grant (or correction). `user_id` stores public.users.id
--- as text (matching how the admin/quota code passes the id); `amount`
--- may be negative for corrections. `period_month` is the FIRST day of
--- the calendar month the grant applies to (e.g. 2026-06-01 for June
--- 2026). `granted_by` is the acting admin's id; `reason` is free text.
+-- One row per grant (or correction). `user_id` is the public.users.id
+-- (uuid) the grant applies to, with a FK so grants are cleaned up when a
+-- user is deleted. `amount` may be negative for corrections. `period_month`
+-- is the FIRST day of the calendar month the grant applies to (e.g.
+-- 2026-06-01 for June 2026). `granted_by` is the acting admin's
+-- public.users.id (FK, nulled if that admin is later deleted so the grant's
+-- audit row survives); `reason` is free text.
 CREATE TABLE IF NOT EXISTS public.transcription_grants (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id       text NOT NULL,
+  user_id       uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   amount        int  NOT NULL,
   period_month  date NOT NULL,   -- first day of the month the grant applies to
   reason        text,
-  granted_by    text,
+  granted_by    uuid REFERENCES public.users(id) ON DELETE SET NULL,
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 
@@ -67,7 +69,7 @@ ALTER TABLE public.transcription_grants ENABLE ROW LEVEL SECURITY;
 GRANT ALL ON TABLE public.transcription_grants TO service_role;
 
 COMMENT ON TABLE  public.transcription_grants            IS 'One-time, current-month admin/support transcription grants. Effective monthly limit = tier_limit + SUM(amount) for the current period_month. Grants expire automatically at month rollover. Corrections are negative-amount rows. Audited via admin_audit_log.';
-COMMENT ON COLUMN public.transcription_grants.user_id      IS 'public.users.id (uuid) stored as text — the user the grant applies to.';
+COMMENT ON COLUMN public.transcription_grants.user_id      IS 'public.users.id (uuid) the grant applies to. FK ON DELETE CASCADE.';
 COMMENT ON COLUMN public.transcription_grants.amount       IS 'Extra transcriptions granted for period_month. May be negative for corrections.';
 COMMENT ON COLUMN public.transcription_grants.period_month IS 'First day of the calendar month the grant applies to (e.g. 2026-06-01). Grants only count for this month.';
 COMMENT ON COLUMN public.transcription_grants.granted_by   IS 'Acting admin''s id (public.users.id as resolved by the grant API).';
