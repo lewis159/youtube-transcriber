@@ -28,7 +28,7 @@ on:
       supabase_url:
         description: 'Staging PostgREST URL'
         required: false
-        default: 'https://staging.bentech.dev/rest/v1'
+        default: 'https://staging.bentech.dev'
         type: string
       app_url:
         description: 'Staging app URL'
