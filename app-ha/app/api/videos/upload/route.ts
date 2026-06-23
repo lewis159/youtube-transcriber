@@ -2,23 +2,20 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { createVideo, updateVideoStatus, saveTranscript, supabaseAdmin, getSupabaseUserId } from '@/lib/supabase'
+import { claimTranscriptionSlot, updateVideoStatus, saveTranscript, supabaseAdmin, getSupabaseUserId } from '@/lib/supabase'
 import { fetchTranscript, extractYouTubeId, getYouTubeThumbnail, getYouTubeTitle } from '@/lib/transcript'
 import { checkUserFeature, upgradeRequired } from '@/lib/feature-flags'
 import { enqueueTranscription } from '@/lib/transcription-queue'
 import { logEvent, EVENTS } from '@/lib/event-log'
+import { transcriptionLimitForTier } from '@/lib/tiers'
 
 // ── Cost guardrail: per-tier MONTHLY transcription quota ─────────────────────
-// Tunable. Caps how many videos a user may transcribe per calendar month, by
-// tier. `null` = unlimited (skip the check entirely). Counted against the
-// `videos` table (rows created this calendar month), so it is inherently shared
-// across all app replicas — no extra infra needed.
-const TIER_TRANSCRIPTION_LIMITS: Record<string, number | null> = {
-  starter: 5,
-  pro: 100,
-  studio: 500,
-  enterprise: null, // unlimited
-}
+// The per-tier monthly limit lives in the single source of truth lib/tiers.ts
+// (which must match tier_features.config.monthly_credits). The check itself is
+// now performed ATOMICALLY in the DB via claim_transcription_slot (migration
+// 019): count-this-month + insert happen in one transaction under a per-user
+// advisory lock, so concurrent uploads can no longer all pass before any
+// insert. `null` limit = unlimited (the count check is skipped server-side).
 
 /**
  * Resolve the caller's tier for the Whisper job payload. Best-effort: if the
@@ -79,25 +76,6 @@ async function getCurrentMonthGrantTotal(clerkUserId: string): Promise<number> {
 }
 
 /**
- * Count how many videos this user has created in the CURRENT calendar month
- * (UTC). Used to enforce the per-tier monthly transcription quota. Uses a HEAD
- * count query so we don't pull rows. Counting the shared `videos` table makes
- * the quota correct across all app replicas.
- */
-async function countVideosThisMonth(clerkUserId: string): Promise<number> {
-  const supabaseUserId = await getSupabaseUserId(clerkUserId)
-  const now = new Date()
-  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-  const { count, error } = await supabaseAdmin
-    .from('videos')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', supabaseUserId)
-    .gte('created_at', startOfMonth.toISOString())
-  if (error) throw error
-  return count ?? 0
-}
-
-/**
  * Read the caller's per-user local-transcription opt-in
  * (users.local_transcription_enabled, migration 011). Best-effort: any failure
  * resolves to `false` so we fall back to the safe synchronous caption path
@@ -150,7 +128,7 @@ async function processVideo(videoId: string, youtubeUrl: string) {
 }
 
 export async function POST(request: NextRequest) {
-  let video: Awaited<ReturnType<typeof createVideo>> | undefined
+  let video: Awaited<ReturnType<typeof claimTranscriptionSlot>> | undefined
 
   try {
     const { userId } = await auth()
@@ -164,33 +142,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(upgradeRequired('transcribe'), { status: 403 })
     }
 
-    // ── Cost guardrail: per-tier MONTHLY transcription quota ────────────────
-    // Runs AFTER the feature gate, BEFORE we create any video row. Unlimited
-    // tiers (limit === null) skip the check. Best-effort count: if the count
-    // query itself fails we fall through and let the upload proceed rather than
-    // hard-blocking a paying user on a transient DB hiccup.
+    // ── Cost guardrail: resolve the caller's tier + effective monthly limit ──
+    // The per-tier limit comes from the single source of truth (lib/tiers.ts,
+    // which mirrors tier_features.config.monthly_credits). The effective limit
+    // = tier limit + admin/support grants for THIS calendar month
+    // (transcription_grants, migration 017). Grants are one-time: they apply
+    // only to the month they were issued for, so the bump expires at month
+    // rollover. `null` tier limit = unlimited → no count check downstream.
+    //
+    // The actual count + compare + insert is done ATOMICALLY by
+    // claimTranscriptionSlot below (migration 019) under a per-user advisory
+    // lock, closing the check-then-act race the old code had.
     const tier = await getUserTier(userId)
-    const tierLimit = TIER_TRANSCRIPTION_LIMITS[tier] ?? TIER_TRANSCRIPTION_LIMITS.starter
-    if (tierLimit != null) {
-      // Effective limit = per-tier monthly limit + admin/support-granted grants
-      // for THIS calendar month (transcription_grants, migration 017). Grants
-      // are one-time: they apply only to the month they were issued for, so the
-      // bump expires automatically at month rollover. `tierLimit` is finite here
-      // (unlimited tiers return null and skip this block entirely).
-      const bonus = await getCurrentMonthGrantTotal(userId)
-      const limit = tierLimit + bonus
-      try {
-        const used = await countVideosThisMonth(userId)
-        if (used >= limit) {
-          return NextResponse.json(
-            { error: 'quota_exceeded', feature: 'transcribe', limit, used },
-            { status: 429 }
-          )
-        }
-      } catch (countErr) {
-        console.error('Monthly quota count failed (allowing upload):', countErr)
-      }
-    }
+    const tierLimit = transcriptionLimitForTier(tier)
+    const bonus = tierLimit != null ? await getCurrentMonthGrantTotal(userId) : 0
+    const effectiveLimit = tierLimit != null ? tierLimit + bonus : null
 
     const { youtubeUrl } = await request.json()
 
@@ -207,13 +173,43 @@ export async function POST(request: NextRequest) {
     // Fetch real YouTube title via oEmbed, fall back to youtubeId
     const videoTitle = await getYouTubeTitle(youtubeId)
 
-    // Create video record
-    video = await createVideo(
-      youtubeId,
-      userId,
-      videoTitle,
-      getYouTubeThumbnail(youtubeId)
-    )
+    // ── Atomic quota claim + video creation ─────────────────────────────────
+    // Counts this month's videos, compares to effectiveLimit, and inserts the
+    // row in ONE DB transaction under a per-user advisory lock. Returns the new
+    // row on success, or null when the quota is exhausted.
+    //
+    // FAIL CLOSED: any DB error here PROPAGATES (claimTranscriptionSlot does not
+    // swallow it) and is caught by the outer try/catch → 500. The previous code
+    // swallowed count failures and let the upload through; for a billing control
+    // we now reject rather than risk uncounted transcriptions.
+    let claimed: Awaited<ReturnType<typeof claimTranscriptionSlot>>
+    try {
+      claimed = await claimTranscriptionSlot(
+        userId,
+        youtubeId,
+        videoTitle,
+        getYouTubeThumbnail(youtubeId),
+        effectiveLimit
+      )
+    } catch (claimErr) {
+      // Quota enforcement failed at the DB layer — fail closed (503), do not
+      // let an unmetered upload through.
+      console.error('Atomic quota claim failed (rejecting upload):', claimErr)
+      return NextResponse.json(
+        { error: 'quota_unavailable', feature: 'transcribe' },
+        { status: 503 }
+      )
+    }
+
+    if (!claimed) {
+      // Quota exhausted — no slot was claimed and no row was inserted.
+      return NextResponse.json(
+        { error: 'quota_exceeded', feature: 'transcribe', limit: effectiveLimit },
+        { status: 429 }
+      )
+    }
+
+    video = claimed
 
     // Lifecycle log: video row created. (logEvent never throws.)
     await logEvent({

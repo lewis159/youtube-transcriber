@@ -1,4 +1,5 @@
 import { UpgradeButton } from '@/components/UpgradeButton'
+import { transcriptionAllowanceLabel } from '@/lib/tiers'
 
 const plans = [
   {
@@ -7,7 +8,8 @@ const plans = [
     price: 'Free',
     description: 'Try it out — no card required.',
     features: [
-      '5 lifetime transcriptions',
+      // Transcription allowance from the single source of truth (lib/tiers.ts).
+      transcriptionAllowanceLabel('starter'),
       'Transcript viewer',
       'Timestamped sentences',
       'Transcript search',
@@ -24,7 +26,7 @@ const plans = [
     period: '/month',
     description: 'For regular creators.',
     features: [
-      '10 transcriptions/month',
+      transcriptionAllowanceLabel('pro'),
       '1-month credit rollover',
       'Export PDF',
       'Folders',
@@ -42,7 +44,7 @@ const plans = [
     period: '/month',
     description: 'For power users and small teams.',
     features: [
-      '40 transcriptions/month',
+      transcriptionAllowanceLabel('studio'),
       '1-month credit rollover',
       'Notes',
       'Audio / video export',
@@ -64,7 +66,7 @@ const plans = [
     price: 'Custom',
     description: 'For agencies and large teams.',
     features: [
-      'Unlimited transcriptions',
+      transcriptionAllowanceLabel('enterprise'),
       'All Studio features',
       'API access',
       'Team seats',
