@@ -34,6 +34,7 @@ anthropic_api_key:ANTHROPIC_API_KEY
 redis_password:REDIS_PASSWORD
 stripe_secret_key:STRIPE_SECRET_KEY
 stripe_webhook_secret:STRIPE_WEBHOOK_SECRET
+resend_api_key:RESEND_API_KEY
 "
 
 SECRETS_DIR="${SECRETS_DIR:-/run/secrets}"

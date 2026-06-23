@@ -11,6 +11,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.2",
     "@clerk/nextjs": "^5.7.0",
+    "@react-email/components": "^0.0.36",
+    "@react-email/render": "^1.4.0",
     "@supabase/supabase-js": "^2.38.0",
     "bullmq": "^5.34.0",
     "jspdf": "^2.5.1",
@@ -19,6 +21,7 @@
     "next": "^15.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "resend": "^4.8.0",
     "stripe": "^17.7.0",
     "svix": "^1.15.0",
     "tailwindcss": "^3.4.1",
