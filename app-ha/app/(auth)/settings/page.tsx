@@ -1,36 +1,40 @@
 import { auth } from '@clerk/nextjs/server'
 import Link from 'next/link'
 import { getSupabaseUserId, supabaseAdmin } from '@/lib/supabase'
+import { transcriptionAllowanceLabel, TIER_TRANSCRIPTION_LIMITS } from '@/lib/tiers'
 import DeleteAccountButton from './DeleteAccountButton'
 import LocalTranscriptionToggle from './LocalTranscriptionToggle'
 
+// Transcription-allowance copy comes from the single source of truth
+// (lib/tiers.ts) so it can never drift from the enforced quota or the pricing
+// page. The remaining feature bullets are settings-specific marketing copy.
 const TIER_INFO = {
   starter: {
     name: 'Starter',
     price: 'Free',
     color: '#888',
-    features: ['5 transcriptions total', 'Transcript viewer & search', 'Download TXT'],
+    features: [transcriptionAllowanceLabel('starter'), 'Transcript viewer & search', 'Download TXT'],
     next: 'pro',
   },
   pro: {
     name: 'Pro',
     price: '$9/mo',
     color: '#E53935',
-    features: ['10 transcriptions/month', 'PDF & all export formats', 'Folders & sharing'],
+    features: [transcriptionAllowanceLabel('pro'), 'PDF & all export formats', 'Folders & sharing'],
     next: 'studio',
   },
   studio: {
     name: 'Studio',
     price: '$29/mo',
     color: '#ff6b6b',
-    features: ['Everything in Pro', 'AI chapters', 'Notes panel', 'Priority support'],
+    features: [transcriptionAllowanceLabel('studio'), 'AI chapters', 'Notes panel', 'Priority support'],
     next: 'enterprise',
   },
   enterprise: {
     name: 'Enterprise',
     price: 'Custom',
     color: '#E53935',
-    features: ['Everything in Studio', 'API access', 'Team seats', 'SSO / SAML'],
+    features: [transcriptionAllowanceLabel('enterprise'), 'API access', 'Team seats', 'SSO / SAML'],
     next: null,
   },
 }
@@ -50,9 +54,9 @@ export default async function SettingsPage() {
   let currentTier: TierKey = 'starter'
   let dbEmail: string | null = null
   let memberSince: string | null = null
-  let clerkImageUrl: string | null = null
-  let clerkFullName: string | null = null
   let clerkEmail: string | null = null
+  // Real transcriptions used this calendar month (UTC), for the usage widget.
+  let usedThisMonth = 0
 
   if (userId) {
     try {
@@ -72,6 +76,22 @@ export default async function SettingsPage() {
           day: 'numeric',
         })
       }
+
+      // Count videos created this calendar month (UTC) — same window the upload
+      // quota uses. HEAD count so we don't pull rows. Best-effort: stays 0 on
+      // failure so the widget never breaks the page.
+      try {
+        const now = new Date()
+        const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+        const { count } = await supabaseAdmin
+          .from('videos')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', supabaseUserId)
+          .gte('created_at', startOfMonth.toISOString())
+        usedThisMonth = count ?? 0
+      } catch {
+        usedThisMonth = 0
+      }
     } catch {
       // If lookup fails, fall back to defaults already set above
     }
@@ -79,6 +99,15 @@ export default async function SettingsPage() {
 
   const tierInfo = TIER_INFO[currentTier]
   const displayEmail = dbEmail ?? clerkEmail ?? '—'
+
+  // Usage widget figures from the single source of truth (lib/tiers.ts). A null
+  // limit means unlimited; otherwise show used / limit with a progress bar.
+  const transcriptionLimit = TIER_TRANSCRIPTION_LIMITS[currentTier]
+  const usageLabel = transcriptionLimit === null ? `${usedThisMonth} / ∞` : `${usedThisMonth} / ${transcriptionLimit}`
+  const usagePct =
+    transcriptionLimit === null || transcriptionLimit === 0
+      ? 0
+      : Math.min(100, Math.round((usedThisMonth / transcriptionLimit) * 100))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', maxWidth: '760px' }}>
@@ -172,7 +201,7 @@ export default async function SettingsPage() {
           <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '10px' }}>Monthly usage</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '8px' }}>
             <span style={{ color: 'var(--text-secondary)' }}>Transcriptions</span>
-            <span style={{ fontWeight: 600 }}>0 / 3</span>
+            <span style={{ fontWeight: 600 }}>{usageLabel}</span>
           </div>
           <div style={{
             height: '6px',
@@ -180,7 +209,7 @@ export default async function SettingsPage() {
             borderRadius: '3px',
             overflow: 'hidden',
           }}>
-            <div style={{ width: '0%', height: '100%', background: 'var(--accent)', borderRadius: '3px' }} />
+            <div style={{ width: `${usagePct}%`, height: '100%', background: 'var(--accent)', borderRadius: '3px' }} />
           </div>
         </div>
       </section>
