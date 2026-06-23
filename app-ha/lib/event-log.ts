@@ -137,6 +137,8 @@ export const EVENTS = {
   summary_completed: 'summary_completed',
   // AI chat (app)
   chat_message: 'chat_message',
+  // Access denied — a transcribe was blocked by the feature gate or quota (app)
+  transcribe_blocked: 'transcribe_blocked',
   // Universal failure event
   error: 'error',
 } as const
