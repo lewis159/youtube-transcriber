@@ -139,6 +139,16 @@ export async function POST(request: NextRequest) {
     // Feature gate: transcribe
     const canTranscribe = await checkUserFeature(userId, 'transcribe')
     if (!canTranscribe) {
+      // Log the denial so blocked transcriptions are visible to admins. A
+      // misconfig (e.g. an empty tier_features table) shows up as a flood of
+      // these for users who should have access.
+      await logEvent({
+        level: 'warn',
+        event: EVENTS.transcribe_blocked,
+        userId,
+        message: 'Transcribe blocked: feature not enabled for the user’s tier',
+        metadata: { reason: 'upgrade_required', feature: 'transcribe' },
+      })
       return NextResponse.json(upgradeRequired('transcribe'), { status: 403 })
     }
 
@@ -193,8 +203,17 @@ export async function POST(request: NextRequest) {
       )
     } catch (claimErr) {
       // Quota enforcement failed at the DB layer — fail closed (503), do not
-      // let an unmetered upload through.
-      console.error('Atomic quota claim failed (rejecting upload):', claimErr)
+      // let an unmetered upload through. This is a genuine system fault → error.
+      await logEvent({
+        level: 'error',
+        event: EVENTS.error,
+        userId,
+        message: 'Atomic quota claim failed (rejecting upload, fail-closed)',
+        metadata: {
+          reason: 'quota_unavailable',
+          error: claimErr instanceof Error ? claimErr.message : String(claimErr),
+        },
+      })
       return NextResponse.json(
         { error: 'quota_unavailable', feature: 'transcribe' },
         { status: 503 }
@@ -203,6 +222,13 @@ export async function POST(request: NextRequest) {
 
     if (!claimed) {
       // Quota exhausted — no slot was claimed and no row was inserted.
+      await logEvent({
+        level: 'warn',
+        event: EVENTS.transcribe_blocked,
+        userId,
+        message: 'Transcribe blocked: monthly quota reached',
+        metadata: { reason: 'quota_exceeded', tier, limit: effectiveLimit },
+      })
       return NextResponse.json(
         { error: 'quota_exceeded', feature: 'transcribe', limit: effectiveLimit },
         { status: 429 }
