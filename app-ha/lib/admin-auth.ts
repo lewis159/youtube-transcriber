@@ -23,10 +23,16 @@ export async function requireAdmin(): Promise<NextResponse | null> {
 
   const supabase = getServiceClient()
 
-  // Skip role check if Supabase credentials aren't configured (dev with no DB)
+  // Dev convenience ONLY: skip the role check when Supabase isn't configured
+  // (local work with no DB). This must FAIL CLOSED in production — a
+  // missing/placeholder Supabase URL there is a misconfiguration and must
+  // DENY admin access, never grant it to every signed-in user.
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
   if (!url || url.includes('placeholder')) {
-    return null
+    if (process.env.NODE_ENV !== 'production') {
+      return null
+    }
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const { data: user, error } = await supabase
@@ -59,10 +65,16 @@ export async function requireGlobalAdminPage(): Promise<void> {
     redirect('/dashboard')
   }
 
-  // Skip role check if Supabase credentials aren't configured (dev with no DB)
+  // Dev convenience ONLY: skip the role check when Supabase isn't configured
+  // (local work with no DB). This must FAIL CLOSED in production — a
+  // missing/placeholder Supabase URL there is a misconfiguration and must
+  // DENY admin access (redirect), never silently grant page access.
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
   if (!url || url.includes('placeholder')) {
-    return
+    if (process.env.NODE_ENV !== 'production') {
+      return
+    }
+    redirect('/dashboard')
   }
 
   const supabase = getServiceClient()
