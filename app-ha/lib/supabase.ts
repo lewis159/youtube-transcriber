@@ -33,6 +33,46 @@ export async function createVideo(youtubeId: string, clerkUserId: string, title?
   return data
 }
 
+/**
+ * Atomically claim one monthly transcription slot AND create the video row in
+ * a single DB transaction (migration 019: claim_transcription_slot, serialised
+ * per-user via an advisory lock). This replaces the old non-atomic
+ * "count videos this month → compare → createVideo" sequence, which let
+ * concurrent uploads all pass the check before any insert.
+ *
+ * @param effectiveLimit  Tier monthly limit + current-month grants, or `null`
+ *                        for unlimited (count check skipped server-side).
+ * @returns The new video row if a slot was claimed, or `null` if the quota is
+ *          exhausted (the function returned zero rows). Throws on any DB error
+ *          so the caller can FAIL CLOSED (this is a billing control).
+ */
+export async function claimTranscriptionSlot(
+  clerkUserId: string,
+  youtubeId: string,
+  title: string | undefined,
+  thumbnail: string | undefined,
+  effectiveLimit: number | null
+) {
+  const supabaseUserId = await getSupabaseUserId(clerkUserId)
+  const { data, error } = await supabaseAdmin.rpc('claim_transcription_slot', {
+    p_user_id: supabaseUserId,
+    p_youtube_id: youtubeId,
+    p_title: title ?? null,
+    p_thumbnail: thumbnail ?? null,
+    p_limit: effectiveLimit,
+  })
+
+  // FAIL CLOSED: never swallow a quota/DB error — let it propagate so the
+  // route returns 5xx rather than silently letting an upload through.
+  if (error) throw error
+
+  // The function returns SETOF videos: a single-row array on success, or an
+  // empty array when the quota is exhausted. Supabase surfaces SETOF as an
+  // array. Normalise to the row or null.
+  const rows = Array.isArray(data) ? data : data ? [data] : []
+  return rows.length > 0 ? rows[0] : null
+}
+
 export async function updateVideoStatus(
   videoId: string,
   status: string,
