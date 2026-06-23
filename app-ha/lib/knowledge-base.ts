@@ -1315,4 +1315,42 @@ export const KB_ARTICLES: KBArticle[] = [
       },
     ],
   },
+  {
+    slug: 'transcription-error-logging',
+    title: 'Transcription error logging — what blocked uploads record & how to diagnose',
+    description:
+      'Every blocked transcription now writes an event (console + event_logs). Covers the transcribe_blocked and error events, their levels, where to find them, and how to diagnose common causes — including an empty tier_features table on a freshly cloned environment.',
+    category: 'admin-system',
+    role: 'admin',
+    videoId: null,
+    readTime: 4,
+    tags: ['logging', 'transcription', 'observability', 'audience:admin', 'difficulty:intermediate', 'type:reference'],
+    lastUpdated: '2026-06-23',
+    steps: [
+      {
+        heading: 'What gets logged when a transcription is blocked',
+        body: 'The upload route (app-ha/app/api/videos/upload/route.ts) logs every path that refuses to start a transcription, via logEvent (lib/event-log.ts). Each event is written to BOTH the console (a structured JSON line) and the event_logs table, so it appears under Admin > Logs. Previously these rejections returned an HTTP error with no log at all, which made misconfigurations invisible.',
+      },
+      {
+        heading: 'The events and levels',
+        body: 'Three block paths are logged:\n- Feature gate (HTTP 403): the user\'s tier does not include the transcribe feature. Logged as event "transcribe_blocked", level "warn", metadata { reason: "upgrade_required", feature: "transcribe" }.\n- Quota exceeded (HTTP 429): the user hit their monthly limit. Logged as "transcribe_blocked", level "warn", metadata { reason: "quota_exceeded", tier, limit }.\n- Quota check failed (HTTP 503): the atomic quota DB call errored and the upload was failed-closed. Logged as event "error", level "error", metadata { reason: "quota_unavailable", error }.\nPolicy denials are "warn" (expected — e.g. a free user hitting the paywall); a genuine system fault is "error".',
+      },
+      {
+        heading: 'Where to find them',
+        body: 'Admin > Logs (backed by the event_logs table). Filter by event = transcribe_blocked for denials, or level = error for system faults. Each row carries the user_id (the Clerk user id) and a metadata payload with the reason. You can also grep the app container logs for the JSON lines containing "event":"transcribe_blocked".',
+      },
+      {
+        heading: 'Diagnosing: who is blocked and why',
+        body: 'Read metadata.reason:\n- "quota_exceeded" with a matching tier/limit is normal — the user genuinely used their monthly allowance.\n- "upgrade_required" is normal for a free/lower tier that does not include the feature.\n- BUT a flood of "upgrade_required" for users who SHOULD have access (paid tiers, or every user at once) is a red flag for a misconfiguration — see the next step.\n- "quota_unavailable" (error level) means the database quota path failed; check the claim_transcription_slot function and PostgREST health.',
+      },
+      {
+        heading: 'Common cause: empty tier_features (freshly cloned environments)',
+        body: 'checkUserFeature (lib/feature-flags.ts) looks up tier_features for the user\'s tier and DEFAULTS TO FALSE when there is no matching row. So if tier_features is empty, EVERY feature is blocked for EVERYONE and you get a flood of transcribe_blocked / upgrade_required. This happens on environments cloned from prod that skip the tier_features config table (notably staging). Verify: SELECT count(*) FROM tier_features; (or GET /rest/v1/tier_features — it has a public read policy). If empty, re-seed it: the canonical seed is youtube-transcriber migration 005; the GitOps re-seed is bentech-infra migration 0006_seed_tier_features (seeds only when the table is empty, safe no-op on prod). After seeding, transcription works again.',
+      },
+      {
+        heading: 'Extending the logging',
+        body: 'The block-logging shipped in youtube-transcriber PR #70. Event names live in EVENTS in lib/event-log.ts. To log further blocks (exports, AI features, etc.), call logEvent at the rejection point with EVENTS.transcribe_blocked (or a new event), following the same level convention: warn for policy denials, error for genuine faults.',
+      },
+    ],
+  },
 ]
