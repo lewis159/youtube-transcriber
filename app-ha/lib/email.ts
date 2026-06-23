@@ -21,7 +21,7 @@ import { ShareNotifyEmail } from '@/emails/ShareNotify'
  */
 
 // ── Config ───────────────────────────────────────────────────────────────────
-const DEFAULT_FROM = 'YT Transcriber <notifications@bentech.dev>'
+const DEFAULT_FROM = 'YT Transcriber <notifications@send.bentech.dev>'
 
 function getFrom(): string {
   return process.env.EMAIL_FROM || DEFAULT_FROM
