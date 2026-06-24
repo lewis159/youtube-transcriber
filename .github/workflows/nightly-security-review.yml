@@ -1,98 +1,120 @@
 name: Nightly Security Review
 
-# Automated, unattended security review of the canonical app (app-ha/).
-# Runs in GitHub's cloud on a schedule, so it works with your machine offline.
-# Findings are filed as GitHub Issues labelled "security". It NEVER changes code
-# or opens PRs.
+# Unattended nightly security review of the canonical app (app-ha/). Runs in
+# GitHub's cloud (works with your machine offline) and pushes findings into the
+# Sentinel security console via its ingest API — NOT GitHub issues (so findings
+# stay private even though this repo is public). It never changes code or PRs.
 
 on:
   schedule:
-    # 02:00 UTC daily. GitHub cron has no timezone support; this is ~02:00–03:00
-    # London depending on BST. Adjust the hour if you want strict local time.
-    - cron: '0 2 * * *'
-  workflow_dispatch: {} # allow manual runs from the Actions tab for testing
+    - cron: '0 2 * * *' # 02:00 UTC daily
+  workflow_dispatch: {}
 
 concurrency:
   group: nightly-security-review
   cancel-in-progress: false
 
 jobs:
-  security-review:
+  ai-review:
+    name: AI security review → Sentinel
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
-      issues: write # needed to create issues + ensure the "security" label exists
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code
 
-      - name: Run nightly security review
+      - name: Run Claude security review
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
         run: |
-          cat > "$RUNNER_TEMP/security-prompt.md" <<'PROMPT'
-          You are an automated security reviewer running in CI for the GitHub
-          repository identified by the GH_REPO environment variable. The `gh` CLI
-          is pre-authenticated (GH_TOKEN). Follow these steps exactly.
+          cat > "$RUNNER_TEMP/ai-review-prompt.md" <<'PROMPT'
+          You are an automated security reviewer for this repository. Review ONLY
+          the code under the `app-ha/` directory (the canonical application; ignore
+          the stale root `app/` tree). Look for GENUINE, exploitable security
+          vulnerabilities: broken or missing authentication/authorization, SQL or
+          command injection, insecure direct object references (IDOR), SSRF, path
+          traversal, XSS, unsafe deserialization, exposed sensitive endpoints,
+          insecure session/cookie/CORS handling, and dangerous configuration. Be
+          conservative — report only findings you are confident are real and
+          exploitable. No style nits.
 
-          1. SCOPE: Review ONLY the code under the `app-ha/` directory — it is the
-             canonical application. Ignore the stale root `app/` tree and all other
-             directories.
-
-          2. WHAT TO LOOK FOR: Genuine, exploitable security issues only —
-             hardcoded secrets / API keys / credentials, SQL or command injection,
-             missing or broken authentication/authorization, insecure direct object
-             references, XSS, SSRF, path traversal, unsafe deserialization, exposed
-             sensitive endpoints, insecure cookie/session/CORS handling, and
-             dangerous dependency or configuration mistakes. Be conservative: report
-             only findings you are confident are real and exploitable. No style nits,
-             no speculative "could be hardened" items.
-
-          3. DEDUPLICATE: Before filing anything, run
-             `gh issue list --label security --state open --limit 200 --json number,title,body`
-             and read it. Do NOT create an issue that duplicates an already-open
-             security issue. If a finding already has an open issue, skip it.
-
-          4. ENSURE LABEL EXISTS:
-             `gh label create security --color B60205 --description "Automated security finding" 2>/dev/null || true`
-
-          5. FILE NEW FINDINGS: For each NEW confirmed finding, create exactly one
-             issue with:
-               - Title: `[Security][<SEVERITY>] <short description>`
-                 where SEVERITY is one of CRITICAL, HIGH, MEDIUM, LOW.
-               - Body containing, as markdown:
-                   **Severity:** ...
-                   **Affected file(s):** path:line (relative to repo root)
-                   **Description:** what the vulnerability is and its impact
-                   **Suggested fix:** concrete remediation
-                   _Filed automatically by the Nightly Security Review workflow._
-               - Label: `security`
-             Use: `gh issue create --title "..." --body "..." --label security`
-
-          6. CONSTRAINTS: Do NOT modify any files. Do NOT commit. Do NOT push. Do
-             NOT open pull requests. Issues are the ONLY output. If you find no new
-             issues, file nothing (do not create a "no issues found" issue).
-
-          7. Finish by printing a short plain-text summary: how many files/areas you
-             reviewed, how many findings were new vs. skipped-as-duplicate, and the
-             issue numbers you created.
+          OUTPUT: print ONLY a single JSON object — no prose, no markdown fences —
+          in exactly this shape:
+          {"findings":[
+            {
+              "title": "<short canonical title>",
+              "description": "<what it is, its impact, and a suggested fix>",
+              "severity": "critical|high|medium|low",
+              "cwe": "<CWE-id if known, else empty string>",
+              "file": "<primary affected file path, relative to repo root>",
+              "vulnClass": "<stable kebab-case class: missing-authz, sql-injection, idor, ssrf, xss, path-traversal, etc.>",
+              "line": <line number or null>
+            }
+          ]}
+          If you find nothing, print exactly {"findings":[]}. Do NOT modify files.
           PROMPT
-          # Scoped permissions: the agent can ONLY read code (Read/Grep/Glob) and
-          # run the gh CLI. It cannot write files, run arbitrary shell commands,
-          # commit, or push. Anything outside this allowlist is denied (and in
-          # headless mode there is no prompt, so it simply cannot act on it).
-          claude -p "$(cat "$RUNNER_TEMP/security-prompt.md")" \
-            --allowedTools "Read,Grep,Glob,Bash(gh:*)" \
-            --max-turns 60
+          claude -p "$(cat "$RUNNER_TEMP/ai-review-prompt.md")" \
+            --allowedTools "Read,Grep,Glob" \
+            --max-turns 40 \
+            > "$RUNNER_TEMP/ai-out.txt" || true
+          echo "---- raw model output (first 40 lines) ----"
+          head -40 "$RUNNER_TEMP/ai-out.txt" || true
+
+      - name: Transform AI findings → Sentinel findings
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const crypto = require('crypto');
+          let raw = '';
+          try { raw = fs.readFileSync(process.env.RUNNER_TEMP + '/ai-out.txt', 'utf8'); } catch {}
+          // Strip markdown fences and isolate the JSON object defensively.
+          let txt = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+          const s = txt.indexOf('{'), e = txt.lastIndexOf('}');
+          let parsed = { findings: [] };
+          if (s !== -1 && e !== -1 && e > s) {
+            try { parsed = JSON.parse(txt.slice(s, e + 1)); }
+            catch (err) { console.log('JSON parse failed:', err.message); }
+          }
+          const sevOk = new Set(['critical', 'high', 'medium', 'low', 'info']);
+          const findings = (Array.isArray(parsed.findings) ? parsed.findings : [])
+            .map(f => {
+              const file = (f.file || '').toString();
+              const vulnClass = (f.vulnClass || '').toString();
+              // Stable fingerprint: file + vuln-class, independent of title/line,
+              // namespaced to this app's source so re-runs converge.
+              const fingerprint = crypto.createHash('sha256')
+                .update(`ai-review-youtube:${file}:${vulnClass}`).digest('hex');
+              return {
+                fingerprint,
+                title: (f.title || `${vulnClass || 'security'} in ${file || 'app'}`).toString().slice(0, 300),
+                description: (f.description || '').toString(),
+                severity: sevOk.has((f.severity || '').toLowerCase()) ? f.severity.toLowerCase() : 'medium',
+                cwe: (f.cwe || '').toString(),
+                component: file,
+                evidence: { file, vulnClass, line: f.line ?? null, source: 'claude-ai-review', repo: 'youtube-transcriber' },
+              };
+            })
+            .filter(f => f.component && f.evidence.vulnClass);
+          fs.writeFileSync('payload.json', JSON.stringify({ findings }));
+          console.log(`Prepared ${findings.length} AI-review findings`);
+          NODE
+
+      - name: Sign and POST to Sentinel
+        env:
+          SENTINEL_INGEST_URL: ${{ secrets.SENTINEL_INGEST_URL }}
+          OPS_INGEST_SECRET: ${{ secrets.OPS_INGEST_SECRET }}
+        run: |
+          SIG=$(openssl dgst -sha256 -hmac "$OPS_INGEST_SECRET" payload.json | awk '{print $NF}')
+          curl -sS -X POST "$SENTINEL_INGEST_URL/api/ops/ingest/ai-review-youtube" \
+            -H "content-type: application/json" \
+            -H "x-ingest-signature: $SIG" \
+            --data-binary @payload.json
