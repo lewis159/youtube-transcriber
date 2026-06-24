@@ -220,7 +220,7 @@ services:
   # Postgres backend count sane. Listens on :6432.
   # ===========================================================================
   pgbouncer:
-    image: edoburu/pgbouncer:1.23.1-p2
+    image: edoburu/pgbouncer:v1.23.1-p2
     environment:
       - DB_HOST=haproxy
       - DB_PORT=5432                 # haproxy writes port -> leader
