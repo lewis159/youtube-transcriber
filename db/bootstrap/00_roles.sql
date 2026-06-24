@@ -63,15 +63,20 @@ END
 $$;
 
 -- ── authenticator (the only LOGIN role; NOINHERIT) ────────────────────────────
+-- NOTE: psql :'var' substitution does NOT expand inside a DO/$$ block (the server
+-- receives the literal ":" → syntax error). So create the role here without a
+-- password, then set the password at the TOP LEVEL below where :'var' DOES expand.
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticator') THEN
-    EXECUTE format('CREATE ROLE authenticator LOGIN NOINHERIT PASSWORD %s', :'authenticator_password');
-  ELSE
-    EXECUTE format('ALTER ROLE authenticator LOGIN NOINHERIT PASSWORD %s', :'authenticator_password');
+    CREATE ROLE authenticator LOGIN NOINHERIT;
   END IF;
 END
 $$;
+-- :authenticator_password (RAW, no extra quotes) — the caller passes it already
+-- single-quoted via printf "'%s'". Using :'var' here would double-quote it and
+-- store the quotes as part of the password (auth then fails).
+ALTER ROLE authenticator WITH LOGIN NOINHERIT PASSWORD :authenticator_password;
 
 -- ── authenticator may SET ROLE to each app role ───────────────────────────────
 -- GRANT role TO authenticator is idempotent (no-op if already a member).
